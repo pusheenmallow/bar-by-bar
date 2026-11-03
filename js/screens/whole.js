@@ -1,15 +1,15 @@
-import { h, go, icon, sticker, toast } from '../ui.js';
+import { h, go, icon, sticker, sheet, toast } from '../ui.js';
 import { get, put, progressMap } from '../store.js';
 import {
-  listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, barsLabel,
-  nextStage, practiceStages, numberRanges,
+  listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges,
 } from '../model.js';
 import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { stickOn, fanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
-import { missing } from './common.js';
+import { missing, speedControl } from './common.js';
 import { scorePages, layer, hitPlace } from './score.js';
+import { practicePicker } from './pick.js';
 
 export async function whole([id], ctx) {
   const piece = await get('pieces', id);
@@ -72,7 +72,9 @@ export async function whole([id], ctx) {
     if (beat < 0) showMetronomeOff();
   };
   const tempoEl = h('output', { class: 'tempo-value' }, tempo);
-  const setTempo = (v) => { tempo = clampTempo(v); met.bpm = tempo; tempoEl.textContent = tempo; };
+  const setTempo = (v) => { tempo = clampTempo(v); met.bpm = tempo; tempoEl.textContent = tempo; speed.show(tempo); };
+  const speed = speedControl(piece, setTempo);
+  speed.show(tempo);
   const metBtn = h('button', {
     class: 'btn met-toggle',
     onClick: async () => {
@@ -100,7 +102,7 @@ export async function whole([id], ctx) {
 
   function footer() {
     if (state === 'ready') {
-      footEl.replaceChildren(metRow, h('button', { class: 'answer clean wide', onClick: start }, 'Start playing'));
+      footEl.replaceChildren(metRow, speed.el, h('button', { class: 'answer clean wide', onClick: start }, 'Start playing'));
     } else if (state === 'playing') {
       footEl.replaceChildren(metRow, h('div', { class: 'answers even' },
         runTime,
@@ -152,8 +154,10 @@ export async function whole([id], ctx) {
   }
 
   function practiseLink(bar) {
-    const stage = nextStage(piece, progress.get(bar.id)) || practiceStages(piece).at(-1);
-    return h('button', { class: 'btn', onClick: () => go(`/train/${id}/${bar.id}/${stage.id}`) }, `Practise bar ${bar.n}`);
+    return h('button', {
+      class: 'btn',
+      onClick: () => sheet(practicePicker({ piece, bars: [bar], progress }), { kind: 'bar-sheet' }),
+    }, `Practise bar ${bar.n}`);
   }
 
   function summary(list, took) {

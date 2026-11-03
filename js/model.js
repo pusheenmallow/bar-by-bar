@@ -95,7 +95,7 @@ export const rowsToLayoutRows = (rows) => rows.map((r) => ({
 
 export const blankProgress = (pieceId, barId) => ({
   key: `${pieceId}|${barId}`, pieceId, barId, done: {}, flagged: false, notes: [], bestTempo: 0,
-  lastCheck: null, clean: 0, slips: 0, lastPractised: 0, runSlip: 0,
+  lastCheck: null, clean: 0, slips: 0, lastPractised: 0, runSlip: 0, crowns: {},
 });
 
 export const dayKey = (ts) => {
@@ -107,15 +107,14 @@ export const dayKey = (ts) => {
 export const practiceStages = (piece) => piece.stages.filter((s) => s.pace !== 'nextday');
 export const checkStage = (piece) => piece.stages.find((s) => s.pace === 'nextday') || null;
 
-export function nextStage(piece, prog) {
-  const done = prog ? prog.done : {};
-  return practiceStages(piece).find((s) => !done[s.id]) || null;
-}
-
 export function reachedCount(piece, prog) {
   if (!prog) return 0;
   return piece.stages.filter((s) => prog.done[s.id]).length;
 }
+
+// The first stage still to finish across a group of bars.
+export const nextForBars = (piece, bars, progress) => practiceStages(piece)
+  .find((s) => !bars.every((b) => progress.get(b.id)?.done[s.id])) || null;
 
 // The pen colour for a bar: the furthest stage it has reached.
 export function topStage(piece, prog) {
@@ -124,6 +123,9 @@ export function topStage(piece, prog) {
   for (const s of piece.stages) if (prog.done[s.id]) top = s;
   return top;
 }
+
+export const crownStages = (piece, prog) => practiceStages(piece).filter((s) => prog?.crowns?.[s.id]);
+export const allCrowned = (bars, progress, stage) => bars.every((b) => progress.get(b.id)?.crowns?.[stage.id]);
 
 export function waitingForCheck(piece, bar, prog, now = Date.now()) {
   const check = checkStage(piece);
@@ -135,6 +137,11 @@ export function waitingForCheck(piece, bar, prog, now = Date.now()) {
   if (!when) return false;
   const today = dayKey(now);
   return dayKey(when) < today && prog.lastCheck !== today;
+}
+
+export function checkStatus(piece, bar, prog, now = Date.now()) {
+  if (waitingForCheck(piece, bar, prog, now)) return 'Ready now';
+  return prog?.lastCheck === dayKey(now) ? 'Try again tomorrow' : 'After full speed';
 }
 
 export function checkGroups(piece, progress, now = Date.now(), size = 4) {
@@ -197,16 +204,20 @@ export const slowTempo = (piece) => clampTempo(even((piece.tempo * (piece.slowPe
 export const easierTempo = (t) => clampTempo(even(t * 0.9));
 export const fasterTempo = (t, target) => Math.min(target, clampTempo(even(t * 1.08 + 1)));
 
-export function startTempo(piece, stage, bars, progress) {
-  const best = Math.min(...bars.map((b) => progress.get(b.id)?.bestTempo || 0));
-  const slow = slowTempo(piece);
-  if (stage.pace === 'target') return Math.min(piece.tempo, Math.max(best, slow));
-  if (stage.pace === 'slow') return slow;
-  return slow;
-}
+export const startTempo = (piece, stage) => (stage.pace === 'target' ? piece.tempo : slowTempo(piece));
+
+// Quick speeds, and the slider's steps between them, as shares of full speed.
+export const SPEEDS = [{ label: 'Half', percent: 50 }, { label: '3/4', percent: 75 }, { label: 'Full', percent: 100 }];
+export const SPEED_STEP = 5;
+export const speedTempo = (piece, percent) => (percent >= 100 ? piece.tempo : clampTempo(even((piece.tempo * percent) / 100)));
+export const speedPercent = (piece, tempo) => (tempo / piece.tempo) * 100;
 
 /* ---------- the clean run ---------- */
 
-export const afterClean = (run) => ({ tokens: run.tokens + 1, slipsInRow: 0 });
-export const afterSlip = (run) => ({ tokens: Math.max(0, run.tokens - 1), slipsInRow: run.slipsInRow + 1 });
+export const MASTERY_RUN = 7;
+export const goodRun = (piece) => Math.min(piece.cleanTarget || 3, MASTERY_RUN - 1);
+
+export const freshRun = () => ({ tokens: 0, slipsInRow: 0, speed: 0 });
+export const afterClean = (run, tempo) => ({ ...run, tokens: run.tokens + 1, slipsInRow: 0, speed: tempo });
+export const afterSlip = (run) => ({ ...run, tokens: Math.max(0, run.tokens - 1), slipsInRow: run.slipsInRow + 1 });
 export const stageNeedsSpeed = (piece, stage, tempo) => stage.pace === 'target' && tempo < piece.tempo;

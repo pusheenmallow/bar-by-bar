@@ -5,6 +5,7 @@ import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { missing } from './common.js';
+import { practicePicker } from './pick.js';
 
 export async function check([id], ctx) {
   const piece = await get('pieces', id);
@@ -98,7 +99,10 @@ export async function check([id], ctx) {
       h('h1', { class: 'center' }, passed === 1 ? '1 bar stuck' : `${passed} bars stuck`),
       again.length ? h('p', { class: 'center lead' }, `${again.length === 1 ? `Bar ${again[0].n} needs` : `Bars ${again.map((b) => b.n).join(', ')} need`} a bit more. Try again tomorrow.`) : null,
       h('div', { class: 'row-buttons narrow' },
-        again.length ? h('button', { class: 'btn', onClick: () => go(`/train/${id}/${again[0].id}/${backStage}`) }, `Practise bar ${again[0].n}`) : null,
+        again.length ? h('button', {
+          class: 'btn',
+          onClick: () => sheet(practicePicker({ piece, bars: [again[0]], progress, stageId: backStage }), { kind: 'bar-sheet' }),
+        }, `Practise bar ${again[0].n}`) : null,
         h('button', { class: 'btn primary', onClick: () => go(`/piece/${id}`) }, 'Back to my piece'))));
   }
 

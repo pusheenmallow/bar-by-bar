@@ -1,6 +1,6 @@
 import { h, go, icon, confirmSheet } from '../ui.js';
 import { get, put, all, byIndex, deletePiece } from '../store.js';
-import { KEYS, penVar, listBars, mistakeList, newId, nextPen } from '../model.js';
+import { KEYS, MASTERY_RUN, goodRun, penVar, listBars, mistakeList, newId, nextPen } from '../model.js';
 import { session } from '../session.js';
 import { field, stepper, missing } from './common.js';
 import { gate } from './parent.js';
@@ -115,7 +115,8 @@ export async function settings([id], ctx) {
         stepper({ label: 'Practice goal in minutes a day', value: piece.dailyGoal ?? 10, min: 0, max: 60, step: 5, format: goalText, onChange: (v) => { piece.dailyGoal = v; save(); } })),
       h('div', { class: 'two' },
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Clean in a row'),
-          stepper({ label: 'Clean in a row', value: piece.cleanTarget, min: 2, max: 7, onChange: (v) => { piece.cleanTarget = v; save(); } })),
+          stepper({ label: 'Clean in a row', value: goodRun(piece), min: 2, max: MASTERY_RUN - 1, onChange: (v) => { piece.cleanTarget = v; save(); } }),
+          h('span', { class: 'field-hint' }, `This colours a bar in. ${MASTERY_RUN} in a row wins a crown.`)),
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Slow speed'),
           stepper({ label: 'Slow speed as a share of full speed', value: piece.slowPercent, min: 40, max: 90, step: 5, format: (v) => `${v}%`, onChange: (v) => { piece.slowPercent = v; save(); } }))),
       field('Key signature', h('select', { onChange: (e) => { piece.keySig = e.target.value; save(); } },

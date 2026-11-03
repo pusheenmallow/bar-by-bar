@@ -1,14 +1,15 @@
-import { h, go, fill, icon, sticker, sheet, closeSheet } from '../ui.js';
+import { h, go, fill, icon, sticker, crown, sheet, closeSheet, replaceSheet } from '../ui.js';
 import { get, put, progressMap, timeDocs, dayTotal, timeSaved } from '../store.js';
 import {
-  penVar, listBars, playableBars, blankProgress, nextStage, practiceStages, checkStage, waitingForCheck,
-  checkGroups, topStage, dayKey, barsLabel, newId, goalSeconds, timeText, clockText, numberRanges,
+  penVar, listBars, playableBars, blankProgress, checkStage, checkStatus, waitingForCheck, checkGroups, topStage,
+  crownStages, barsLabel, dayKey, newId, goalSeconds, timeText, clockText, numberRanges,
 } from '../model.js';
 import { drawBars } from '../images.js';
 import { cssVar } from '../theme.js';
 import { session } from '../session.js';
 import { missing, stepper } from './common.js';
 import { scorePages, layer, hitPlace } from './score.js';
+import { practicePicker } from './pick.js';
 
 const MAX_CHUNK = 12;
 const HEAT_STEPS = 4;              // one hue in the stylesheet: stronger means more time
@@ -84,9 +85,11 @@ export async function mapScreen([id], ctx) {
       const checked = checkStage(piece) && prog?.done[checkStage(piece).id];
       const seconds = barTime.get(bar.id) || 0;
       const inStages = viewing === 'stages';
+      const crowns = crownStages(piece, prog);
       const label = [
         `Bar ${bar.n}`,
         bar.skip ? 'skipped' : reached ? `reached ${reached.name}` : 'not started',
+        crowns.length ? `crown for ${crowns.map((s) => s.name).join(' and ')}` : '',
         seconds ? `${timeText(seconds)} practised` : '',
         prog?.flagged ? 'tough bar' : '',
         prog?.runSlip ? 'slipped in the last whole-piece play' : '',
@@ -103,6 +106,7 @@ export async function mapScreen([id], ctx) {
       h('span', { class: 'num' }, bar.n),
       !inStages && busiest.includes(bar.id) && seconds ? h('span', { class: 'bar-time' }, clockText(seconds)) : null,
       inStages && h('span', { class: 'marks' },
+        crowns.length ? h('span', { class: 'mark crown' }, crown(18), crowns.length > 1 ? crowns.length : null) : null,
         prog?.runSlip ? h('span', { class: 'mark slipped', title: 'Slipped in the whole piece' }, '!') : null,
         prog?.flagged && h('span', { class: 'mark flag' }, icon('flag', 18)),
         prog?.notes.length ? h('span', { class: 'mark note' }, icon('note', 18)) : null,
@@ -111,6 +115,7 @@ export async function mapScreen([id], ctx) {
   }
 
   const counts = () => piece.stages.map((s) => playable.filter((b) => progress.get(b.id)?.done[s.id]).length);
+  const crownCounts = () => piece.stages.map((s) => playable.filter((b) => progress.get(b.id)?.crowns?.[s.id]).length);
 
   const trayEl = h('footer', { class: 'tray' });
   function tray() {
@@ -124,11 +129,13 @@ export async function mapScreen([id], ctx) {
       return;
     }
     const c = counts();
+    const won = crownCounts();
     trayEl.replaceChildren(...piece.stages.map((s, i) => h(parent ? 'button' : 'div', {
       class: `tray-pen ${painting === s.id ? 'active' : ''}`,
       'aria-pressed': parent ? String(painting === s.id) : null,
       onClick: parent ? () => { painting = painting === s.id ? null : s.id; tray(); hint(); } : null,
-    }, h('i', { class: 'tray-swatch', style: { background: penVar(s.pen) } }), h('span', { class: 'tray-name' }, s.name), h('span', { class: 'tray-count' }, `${c[i]} of ${playable.length}`))));
+    }, h('i', { class: 'tray-swatch', style: { background: penVar(s.pen) } }), h('span', { class: 'tray-name' }, s.name), h('span', { class: 'tray-count' }, `${c[i]} of ${playable.length}`,
+        won[i] ? h('span', { class: 'tray-crowns', 'aria-label': `${won[i]} ${won[i] === 1 ? 'crown' : 'crowns'}` }, crown(13), won[i]) : null))));
   }
 
   /* ---------- how to practise ---------- */
@@ -200,8 +207,7 @@ export async function mapScreen([id], ctx) {
   async function onBar(bar) {
     if (painting) {
       const prog = progress.get(bar.id) || blankProgress(id, bar.id);
-      if (prog.done[painting]) delete prog.done[painting];
-      else prog.done[painting] = Date.now();
+      if (prog.done[painting]) { delete prog.done[painting]; delete prog.crowns?.[painting]; } else prog.done[painting] = Date.now();
       await saveProg(prog);
       refresh();
       return;
@@ -220,7 +226,6 @@ export async function mapScreen([id], ctx) {
 
   function openBar(bar, startCount = 1) {
     let count = startCount;
-    let chosen = null;
     const startAt = playable.findIndex((b) => b.id === bar.id);
     const prog = () => progress.get(bar.id) || blankProgress(id, bar.id);
     const chunk = () => (startAt < 0 ? [bar] : playable.slice(startAt, startAt + count));
@@ -233,41 +238,52 @@ export async function mapScreen([id], ctx) {
     const cropBox = h('div', { class: 'crop' }, h('canvas', {}));
     const body = h('div', { class: 'bar-body' });
     const heading = h('h2', {}, barsLabel(chunk()));
+    const head = h('header', { class: 'sheet-head' },
+      heading,
+      h('button', { class: 'round', 'aria-label': 'Close', onClick: () => closeSheet() }, icon('close')));
 
     async function paintCrop() {
       const width = cropBox.clientWidth || 560;
       await drawBars(cropBox.firstChild, chunk(), { width, height: count > 4 ? 300 : 220 });
     }
 
-    function stageRow(s) {
+    // Grown-ups tick off stages here. The player chooses a stage after tapping Practise.
+    function tickRow(s) {
       const p = prog();
       const isCheck = s.pace === 'nextday';
-      const isDone = chunk().every((b) => progress.get(b.id)?.done[s.id]);
-      const waiting = isCheck && waitingForCheck(piece, bar, progress.get(bar.id));
-      const today2 = isCheck && p.lastCheck === dayKey(Date.now());
-      const status = isDone ? 'Done' : isCheck ? (waiting ? 'Ready now' : today2 ? 'Try again tomorrow' : 'After full speed') : '';
-      const select = isCheck ? null : () => { chosen = s.id; renderBody(); };
-      return h(select ? 'button' : 'div', {
-        class: `stage-row ${chosen === s.id ? 'chosen' : ''}`,
-        'aria-pressed': select ? String(chosen === s.id) : null,
-        onClick: select,
-      },
-      h('span', { class: 'swatch', style: { background: penVar(s.pen) } }),
-      h('span', { class: 'stage-name' }, s.name),
-      h('span', { class: 'stage-status' }, status),
-      parent && h('input', {
-        type: 'checkbox',
-        class: 'tick',
-        'aria-label': `${s.name} done for this bar`,
-        checked: !!p.done[s.id],
-        onClick: (e) => e.stopPropagation(),
-        onChange: async (e) => {
-          const next = prog();
-          if (e.target.checked) next.done[s.id] = Date.now(); else delete next.done[s.id];
-          await saveProg(next);
-          refresh(); renderBody();
-        },
-      }));
+      const update = async (change) => {
+        const next = prog();
+        next.crowns ||= {};
+        change(next);
+        await saveProg(next);
+        refresh(); renderBody();
+      };
+      return h('div', { class: 'stage-row' },
+        h('span', { class: 'swatch', style: { background: penVar(s.pen) } }),
+        h('span', { class: 'stage-name' }, s.name),
+        h('span', { class: 'stage-status' }, isCheck && !p.done[s.id] ? checkStatus(piece, bar, progress.get(bar.id)) : ''),
+        !isCheck && h('button', {
+          class: `crown-toggle ${p.crowns?.[s.id] ? 'on' : ''}`,
+          'aria-label': `Crown for ${s.name} on this bar`,
+          'aria-pressed': String(!!p.crowns?.[s.id]),
+          onClick: () => update((next) => {
+            if (next.crowns[s.id]) delete next.crowns[s.id];
+            else {
+              next.crowns[s.id] = Date.now();
+              next.done[s.id] ||= Date.now();
+            }
+          }),
+        }, crown(22)),
+        h('input', {
+          type: 'checkbox',
+          class: 'tick',
+          'aria-label': `${s.name} done for this bar`,
+          checked: !!p.done[s.id],
+          onChange: (e) => update((next) => {
+            if (e.target.checked) next.done[s.id] = Date.now();
+            else { delete next.done[s.id]; delete next.crowns[s.id]; }
+          }),
+        }));
     }
 
     function notes() {
@@ -303,8 +319,6 @@ export async function mapScreen([id], ctx) {
       const p = prog();
       const list = chunk();
       heading.textContent = barsLabel(list);
-      if (!chosen) chosen = (nextStage(piece, p) || practiceStages(piece).at(-1))?.id;
-      const stage = piece.stages.find((s) => s.id === chosen);
       const seconds = barTime.get(bar.id) || 0;
       const tries = p.clean + p.slips;
       fill(body,
@@ -315,14 +329,10 @@ export async function mapScreen([id], ctx) {
             format: (v) => `${v} ${v === 1 ? 'bar' : 'bars'}`,
             onChange: (v) => { count = v; paintCrop(); renderBody(); },
           })),
-        h('div', { class: 'stages' }, piece.stages.map(stageRow)),
-        stage && h('button', {
+        parent && h('div', { class: 'stages' }, piece.stages.map(tickRow)),
+        h('button', {
           class: 'btn primary big wide',
-          onClick: () => {
-            const ids = list.map((b) => b.id).join(',');
-            closeSheet();
-            go(`/train/${id}/${ids}/${chosen}`);
-          },
+          onClick: () => replaceSheet(practicePicker({ piece, bars: list, progress, back: showBar })),
         }, `Practise ${barsLabel(list).toLowerCase()}`),
         count === 1 && (seconds || tries) ? h('p', { class: 'bar-facts' },
           `${timeText(seconds)} on bar ${bar.n}. ${tries ? `${p.clean} of ${tries} tries clean.` : ''}`) : null,
@@ -340,12 +350,12 @@ export async function mapScreen([id], ctx) {
         notes());
     }
 
-    sheet([
-      h('header', { class: 'sheet-head' },
-        heading,
-        h('button', { class: 'round', 'aria-label': 'Close', onClick: () => closeSheet() }, icon('close'))),
-      cropBox, body,
-    ], { kind: 'bar-sheet' });
+    function showBar() {
+      replaceSheet([head, cropBox, body]);
+      renderBody();
+    }
+
+    sheet([head, cropBox, body], { kind: 'bar-sheet' });
     renderBody();
     requestAnimationFrame(() => paintCrop());
   }

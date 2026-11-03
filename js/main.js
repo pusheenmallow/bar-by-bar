@@ -17,7 +17,7 @@ const routes = [
   [/^\/$/, home],
   [/^\/player\/([^/]+)$/, player],
   [/^\/piece\/([^/]+)$/, mapScreen],
-  [/^\/train\/([^/]+)\/([^/]+)\/([^/]+)$/, trainer],
+  [/^\/train\/([^/]+)\/([^/]+)\/([^/]+)(?:\/(\d+))?$/, trainer],
   [/^\/check\/([^/]+)$/, check],
   [/^\/whole\/([^/]+)$/, whole],
   [/^\/stats\/([^/]+)$/, stats],
@@ -46,7 +46,7 @@ async function render() {
   };
   try {
     const el = match
-      ? await match[1](match[0].slice(1).map(decodeURIComponent), ctx)
+      ? await match[1](match[0].slice(1).map((part) => part && decodeURIComponent(part)), ctx)
       : await home([], ctx);
     if (mine !== renderId) return;
     app.replaceChildren(el);

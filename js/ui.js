@@ -163,3 +163,21 @@ export function sticker(size = 72, label) {
     h('svg:circle', { cx: 50, cy: 50, r: 48, class: 'sticker-disc' }),
     h('svg:polygon', { points: star.join(' '), class: 'sticker-star' }));
 }
+
+const crownShape = () => [
+  h('svg:path', { d: 'M25 67 19 37l17 14 14-23 14 23 17-14-6 30z' }),
+  h('svg:rect', { x: 25, y: 71, width: 50, height: 7, rx: 2 }),
+  ...[[19, 35], [50, 26], [81, 35]].map(([cx, cy]) => h('svg:circle', { cx, cy, r: 4.5 })),
+];
+
+// A plain little crown, in the colour of the text around it.
+export function crown(size = 18, label) {
+  return h('svg:svg', { viewBox: '12 18 76 64', width: size, height: size * 0.84, class: 'crown-art', role: label ? 'img' : null, 'aria-label': label || null, 'aria-hidden': label ? null : 'true' }, crownShape());
+}
+
+// The same crown on a gold sticker, for the end of a run.
+export function crownSticker(size = 72, label) {
+  return h('svg:svg', { viewBox: '0 0 100 100', width: size, height: size, class: 'sticker-art', role: label ? 'img' : null, 'aria-label': label || null, 'aria-hidden': label ? null : 'true' },
+    h('svg:circle', { cx: 50, cy: 50, r: 48, class: 'sticker-disc' }),
+    h('svg:g', { class: 'sticker-star' }, crownShape()));
+}

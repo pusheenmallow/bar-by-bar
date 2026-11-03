@@ -127,6 +127,13 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 
 .bar-top { display: flex; align-items: center; gap: 12px; min-height: 46px; }
 .bar-top h1 { flex: 1; min-width: 0; }
+.back {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 46px; padding: 4px 12px 4px 4px; margin-left: -4px;
+  background: none; border: 0; color: var(--ink-2); font-size: .92rem; white-space: nowrap;
+}
+.back:active { opacity: .6; }
+.round.quiet { color: var(--ink-2); border-color: transparent; }
+:root[data-space='grown-ups'] body { box-shadow: inset 0 3px 0 var(--brass); }
 
 /* ---------- controls ---------- */
 .btn {
@@ -555,6 +562,12 @@ textarea, input[type='text'], input[type='number'], select {
   .pick-label { margin-top: 0; }
   .goal-option { min-height: 54px; }
   .btn.big { min-height: 52px; }
+}
+
+@media (max-width: 560px) {
+  .bar-top { flex-wrap: wrap; row-gap: 0; }
+  .bar-top h1 { order: 3; flex-basis: 100%; }
+  .bar-top .back + .btn, .bar-top .round.quiet { margin-left: auto; }
 }
 
 @media (max-width: 720px) {

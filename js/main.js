@@ -1,4 +1,4 @@
-import { h, closeSheet } from './ui.js';
+import { h, closeSheet, noteRoute } from './ui.js';
 import './theme.js';
 import { home } from './screens/home.js';
 import { player } from './screens/player.js';
@@ -25,11 +25,26 @@ const routes = [
   [/^\/parent\/add$/, addPiece],
   [/^\/parent\/review\/([^/]+)$/, review],
   [/^\/parent\/piece\/([^/]+)$/, settings],
+  [/^\/parent\/bars\/([^/]+)$/, (args, ctx) => mapScreen(args, ctx, true)],
+  [/^\/parent\/stats\/([^/]+)$/, (args, ctx) => stats(args, ctx, true)],
 ];
 
 const app = document.getElementById('app');
 let leaving = [];
 let renderId = 0;
+let lastPath = null;
+let inGrownUps = false;
+
+// Grown-ups is a separate space: it is open only while on its own screens.
+function enter(path) {
+  noteRoute(path);
+  const grownUps = path.startsWith('/parent');
+  if (grownUps && !inGrownUps) session.exitTo = lastPath || '/';
+  if (!grownUps) session.parent = false;
+  inGrownUps = grownUps;
+  lastPath = path;
+  document.documentElement.dataset.space = grownUps ? 'grown-ups' : 'players';
+}
 
 async function render() {
   const mine = ++renderId;
@@ -37,6 +52,7 @@ async function render() {
   leaving.forEach((fn) => fn());
   leaving = [];
   const path = location.hash.slice(1) || '/';
+  enter(path);
   const match = routes.map(([re, fn]) => [path.match(re), fn]).find(([m]) => m);
   const showing = [];
   const ctx = {

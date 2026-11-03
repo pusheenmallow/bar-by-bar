@@ -1,4 +1,4 @@
-import { h, go, icon, sticker, sheet, toast } from '../ui.js';
+import { h, goUp, icon, sticker, sheet, toast } from '../ui.js';
 import { get, put, progressMap } from '../store.js';
 import {
   listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges,
@@ -7,7 +7,7 @@ import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { stickOn, fanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
-import { missing, speedControl } from './common.js';
+import { missing, speedControl, backTo } from './common.js';
 import { scorePages, layer, hitPlace } from './score.js';
 import { practicePicker } from './pick.js';
 
@@ -172,7 +172,7 @@ export async function whole([id], ctx) {
       list.length ? h('div', { class: 'row-buttons narrow' }, list.slice(0, 4).map(practiseLink)) : null,
       h('div', { class: 'row-buttons narrow' },
         h('button', { class: 'btn', onClick: () => ctx.rerender() }, 'Play it again'),
-        h('button', { class: 'btn primary', onClick: () => go(`/piece/${id}`) }, 'Back to my piece'))));
+        h('button', { class: 'btn primary', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece'))));
   }
 
   const ro = new ResizeObserver(() => views.forEach(draw));
@@ -195,7 +195,7 @@ export async function whole([id], ctx) {
 
   const root = h('main', { class: 'screen whole' },
     h('header', { class: 'bar-top' },
-      h('button', { class: 'round', 'aria-label': 'Back to the bar map', onClick: () => go(`/piece/${id}`) }, icon('back')),
+      backTo('My piece', `/piece/${id}`),
       h('h1', {}, 'Whole piece'),
       clockView(clock)),
     pagesEl, footEl);

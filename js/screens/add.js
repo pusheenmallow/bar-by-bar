@@ -1,10 +1,10 @@
-import { h, go, icon, sheet, closeSheet, toast } from '../ui.js';
+import { h, go, goUp, icon, sheet, closeSheet, toast } from '../ui.js';
 import { all, put, del } from '../store.js';
 import { KEYS, defaultStages, newId, rowsToLayoutRows } from '../model.js';
 import { findBars, pdfToImages } from '../detect-client.js';
 import { pageUrl, forgetPage } from '../images.js';
 import { session } from '../session.js';
-import { field, stepper, busyPanel } from './common.js';
+import { field, stepper, busyPanel, backTo } from './common.js';
 import { gate } from './parent.js';
 
 export function blankPiece(playerId) {
@@ -21,7 +21,7 @@ export const barCount = (pg) => pg.rows.reduce((n, r) => n + r.bars.length, 0);
 export async function addPiece(_, ctx) {
   if (!session.parent) return gate(() => ctx.rerender());
   const players = (await all('players')).sort((a, b) => a.createdAt - b.createdAt);
-  if (!players.length) { go('/parent'); return h('main', {}); }
+  if (!players.length) { goUp('/parent'); return h('main', {}); }
   const piece = (await all('pieces')).find((p) => p.draft) || blankPiece(players[0].id);
 
   const save = () => put('pieces', piece);
@@ -110,7 +110,7 @@ export async function addPiece(_, ctx) {
 
   return h('main', { class: 'screen form' },
     h('header', { class: 'bar-top' },
-      h('button', { class: 'round', 'aria-label': 'Back', onClick: () => go('/parent') }, icon('back')),
+      backTo('Grown-ups', '/parent'),
       h('h1', {}, 'Add a piece')),
     field('Name of the piece', title),
     field('Who is learning it', player),

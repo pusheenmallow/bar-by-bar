@@ -1,4 +1,4 @@
-import { h, go, icon, sheet, closeSheet, replaceSheet, sticker, crown, crownSticker, toast } from '../ui.js';
+import { h, goUp, swapTo, icon, sheet, closeSheet, replaceSheet, sticker, crown, crownSticker, toast } from '../ui.js';
 import { get, put, progressMap } from '../store.js';
 import {
   penVar, listBars, barsLabel, blankProgress, mistakeList, nextForBars, startTempo, clampTempo, easierTempo, fasterTempo,
@@ -9,7 +9,7 @@ import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { stickOn, peelOff, fanfare, crownFanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
-import { missing, speedControl } from './common.js';
+import { missing, speedControl, backTo } from './common.js';
 
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -251,7 +251,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
         canGoOn && h('button', { class: `btn ${next ? '' : 'primary'}`, onClick: goForCrown }, crown(22), `${more} more for the crown`),
         next && h('button', {
           class: 'btn primary',
-          onClick: () => { closeSheet(); go(`/train/${id}/${bars.map((b) => b.id).join(',')}/${next.id}/${chosenGoal}`); },
+          onClick: () => { closeSheet(); swapTo(`/train/${id}/${bars.map((b) => b.id).join(',')}/${next.id}/${chosenGoal}`); },
         }, `Next: ${next.name}`)),
     ], { dismiss: false });
   }
@@ -342,7 +342,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   }
 
   /* ---------- leaving ---------- */
-  function leave() { go(`/piece/${id}`); }
+  function leave() { goUp(`/piece/${id}`); }
 
   let letSleep = () => {};
 
@@ -364,7 +364,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
 
   return h('main', { class: 'trainer', vars: { pen: penVar(stage.pen) } },
     h('header', { class: 'train-top' },
-      h('button', { class: 'round', 'aria-label': 'Back to the bar map', onClick: leave }, icon('back')),
+      backTo('My piece', `/piece/${id}`),
       title,
       clockView(clock),
       h('span', { class: 'stage-tag' }, h('i', {}), stage.name)),

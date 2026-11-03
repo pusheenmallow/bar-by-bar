@@ -1,8 +1,8 @@
-import { h, go, icon, confirmSheet } from '../ui.js';
+import { h, go, goUp, icon, confirmSheet } from '../ui.js';
 import { get, put, all, byIndex, deletePiece } from '../store.js';
 import { KEYS, MASTERY_RUN, goodRun, penVar, listBars, mistakeList, newId, nextPen } from '../model.js';
 import { session } from '../session.js';
-import { field, stepper, missing } from './common.js';
+import { field, stepper, missing, backTo, doneButton } from './common.js';
 import { gate } from './parent.js';
 import { goalText } from './add.js';
 
@@ -89,12 +89,13 @@ export async function settings([id], ctx) {
 
   return h('main', { class: 'screen form' },
     h('header', { class: 'bar-top' },
-      h('button', { class: 'round', 'aria-label': 'Back', onClick: () => go('/parent') }, icon('back')),
-      h('h1', {}, piece.title)),
+      backTo('Grown-ups', '/parent'),
+      h('h1', {}, piece.title),
+      doneButton()),
 
     h('div', { class: 'row-buttons left' },
-      h('button', { class: 'btn primary', onClick: () => go(`/piece/${id}`) }, 'Add notes and mark bars'),
-      h('button', { class: 'btn', onClick: () => go(`/stats/${id}`) }, 'Stats'),
+      h('button', { class: 'btn primary', onClick: () => go(`/parent/bars/${id}`) }, 'Add notes and mark bars'),
+      h('button', { class: 'btn', onClick: () => go(`/parent/stats/${id}`) }, 'Stats'),
       h('button', { class: 'btn', onClick: () => go(`/parent/review/${id}`) }, 'Check the boxes')),
 
     h('section', { class: 'block' },
@@ -136,7 +137,8 @@ export async function settings([id], ctx) {
           const yes = await confirmSheet({ title: `Delete “${piece.title}”?`, body: 'Its pages and all progress will be removed from this tablet.', yes: 'Delete piece', danger: true });
           if (!yes) return;
           await deletePiece(id);
-          go('/parent');
+          if (session.exitTo.includes(id)) session.exitTo = '/';
+          goUp('/parent');
         },
       }, 'Delete piece')));
 }

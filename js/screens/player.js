@@ -1,7 +1,7 @@
-import { h, go, icon } from '../ui.js';
+import { h, go } from '../ui.js';
 import { get, byIndex, progressMap, secondsOn } from '../store.js';
 import { penVar, playableBars, topStage, checkGroups, dayKey, goalSeconds, timeText } from '../model.js';
-import { missing } from './common.js';
+import { missing, backTo, grownUpsButton } from './common.js';
 
 function strip(piece, bars, progress) {
   return h('div', { class: 'strip', 'aria-hidden': 'true' }, bars.map((b) => {
@@ -35,8 +35,9 @@ export async function player([id]) {
 
   return h('main', { class: 'screen player', vars: { pen: penVar(person.pen) } },
     h('header', { class: 'bar-top' },
-      h('button', { class: 'round', 'aria-label': 'Back', onClick: () => go('/') }, icon('back')),
-      h('h1', { class: 'name-title' }, h('span', {}, person.name))),
+      backTo('Players', '/'),
+      h('h1', { class: 'name-title' }, h('span', {}, person.name)),
+      grownUpsButton('/parent')),
     rows.length ? h('div', { class: 'piece-list' }, rows)
       : h('p', { class: 'lead empty' }, 'No pieces yet. Ask a grown-up to add one.'));
 }

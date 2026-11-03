@@ -1,8 +1,9 @@
-import { h, go, fill, icon } from '../ui.js';
+import { h, fill } from '../ui.js';
 import { get, byIndex, timeDocs, dayTotal, timeSaved } from '../store.js';
 import { MODES, playableBars, dayKey, goalSeconds, timeText, clockText, numberRanges } from '../model.js';
 import { session } from '../session.js';
-import { missing } from './common.js';
+import { missing, backTo, doneButton } from './common.js';
+import { gate } from './parent.js';
 
 const RANGES = [
   { id: 'today', label: 'Today', days: 1 },
@@ -78,7 +79,8 @@ function splitBar(totals) {
   ];
 }
 
-export async function stats([id], ctx) {
+export async function stats([id], ctx, grownUp = false) {
+  if (grownUp && !session.parent) return gate(() => ctx.rerender());
   const piece = await get('pieces', id);
   if (!piece) return missing('That piece has gone.');
   await timeSaved();
@@ -179,8 +181,9 @@ export async function stats([id], ctx) {
 
   return h('main', { class: 'screen stats' },
     h('header', { class: 'bar-top' },
-      h('button', { class: 'round', 'aria-label': 'Back', onClick: () => go(session.parent ? `/parent/piece/${id}` : `/piece/${id}`) }, icon('back')),
-      h('h1', {}, piece.title)),
+      grownUp ? backTo('Piece settings', `/parent/piece/${id}`) : backTo('My piece', `/piece/${id}`),
+      h('h1', {}, piece.title),
+      grownUp ? doneButton() : null),
     h('section', { class: 'block flat' },
       h('h2', {}, 'Minutes a day, last 14 days'),
       dailyChart(chartRows, goal)),

@@ -4,7 +4,7 @@ import { penVar, PLAYER_PENS, newId, playableBars, topStage } from '../model.js'
 import { themeChoice, setTheme } from '../theme.js';
 import { session } from '../session.js';
 import { isMuted, setMuted } from '../sound.js';
-import { field, busyPanel } from './common.js';
+import { field, busyPanel, doneButton, leaveGrownUps } from './common.js';
 
 const hash = async (pin) => {
   const bytes = new TextEncoder().encode(`bar-by-bar:${pin}`);
@@ -68,7 +68,7 @@ export async function gate(next) {
   }
 
   return h('main', { class: 'screen gate' },
-    h('header', { class: 'bar-top' }, h('button', { class: 'round', 'aria-label': 'Back', onClick: () => go('/') }, icon('back'))),
+    h('header', { class: 'bar-top' }, h('button', { class: 'back', onClick: leaveGrownUps }, icon('back', 22), h('span', {}, 'Back'))),
     title, sub, dots,
     h('div', { class: 'keypad' }, keys.map((k) => (k === ''
       ? h('span', {})
@@ -188,12 +188,8 @@ export async function parentHome(_, ctx) {
 
   return h('main', { class: 'screen parent' },
     h('header', { class: 'bar-top' },
-      h('button', { class: 'round', 'aria-label': 'Back', onClick: () => go('/') }, icon('back')),
       h('h1', {}, 'Grown-ups'),
-      h('button', {
-        class: 'btn lock',
-        onClick: () => { session.parent = false; go('/'); },
-      }, icon('lock', 22), 'Lock')),
+      doneButton()),
 
     session.installPrompt && h('section', { class: 'block' },
       h('h2', {}, 'Install'),

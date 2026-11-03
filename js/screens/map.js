@@ -7,14 +7,16 @@ import {
 import { drawBars } from '../images.js';
 import { cssVar } from '../theme.js';
 import { session } from '../session.js';
-import { missing, stepper } from './common.js';
+import { missing, stepper, backTo, doneButton, grownUpsButton } from './common.js';
+import { gate } from './parent.js';
 import { scorePages, layer, hitPlace } from './score.js';
 import { practicePicker } from './pick.js';
 
 const MAX_CHUNK = 12;
 const HEAT_STEPS = 4;              // one hue in the stylesheet: stronger means more time
 
-export async function mapScreen([id], ctx) {
+export async function mapScreen([id], ctx, grownUp = false) {
+  if (grownUp && !session.parent) return gate(() => ctx.rerender());
   const piece = await get('pieces', id);
   if (!piece) return missing('That piece has gone.');
   await timeSaved();
@@ -22,7 +24,8 @@ export async function mapScreen([id], ctx) {
   const docs = await timeDocs(id);
   const bars = listBars(piece);
   const playable = playableBars(piece);
-  const parent = session.parent;
+  const parent = grownUp;
+  const person = await get('players', piece.playerId);
   let painting = null;
   let viewing = 'stages';
   let tool = 'bar';
@@ -322,7 +325,7 @@ export async function mapScreen([id], ctx) {
       const seconds = barTime.get(bar.id) || 0;
       const tries = p.clean + p.slips;
       fill(body,
-        h('div', { class: 'chunk-line' },
+        !parent && h('div', { class: 'chunk-line' },
           h('span', {}, 'Practise'),
           stepper({
             label: 'Bars to practise', value: count, min: 1, max: Math.min(MAX_CHUNK, playable.length - startAt), compact: true,
@@ -330,7 +333,7 @@ export async function mapScreen([id], ctx) {
             onChange: (v) => { count = v; paintCrop(); renderBody(); },
           })),
         parent && h('div', { class: 'stages' }, piece.stages.map(tickRow)),
-        h('button', {
+        !parent && h('button', {
           class: 'btn primary big wide',
           onClick: () => replaceSheet(practicePicker({ piece, bars: list, progress, back: showBar })),
         }, `Practise ${barsLabel(list).toLowerCase()}`),
@@ -374,11 +377,9 @@ export async function mapScreen([id], ctx) {
 
   return h('main', { class: 'screen map' },
     h('header', { class: 'bar-top' },
-      h('button', {
-        class: 'round', 'aria-label': 'Back',
-        onClick: () => go(parent ? `/parent/piece/${id}` : `/player/${piece.playerId}`),
-      }, icon('back')),
-      h('h1', {}, piece.title)),
+      parent ? backTo('Piece settings', `/parent/piece/${id}`) : backTo(person ? `${person.name}’s pieces` : 'Pieces', `/player/${piece.playerId}`),
+      h('h1', {}, piece.title),
+      parent ? doneButton() : grownUpsButton(`/parent/piece/${id}`)),
     clockEl,
     !parent && modeEl,
     hintEl,

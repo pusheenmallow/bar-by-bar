@@ -28,7 +28,7 @@ function append(el, kids) {
 // Closing a panel steps back through history, which finishes a moment later.
 // Anything that needs history in the meantime waits for that step.
 let steppingBack = false;
-let goAfter = null;
+let thenDo = null;
 let pushAfter = false;
 
 // Swaps an element's contents, skipping anything left out by a condition.
@@ -38,9 +38,45 @@ export function fill(el, ...kids) {
   return el;
 }
 
-export const go = (path) => {
-  if (steppingBack) goAfter = path; else location.hash = path;
+const whenReady = (move) => { if (steppingBack) thenDo = move; else move(); };
+
+// The screens passed through to get here, so going back returns along the same path.
+// Each history entry remembers its place, which keeps this right after a reload or a device back.
+const trail = [];
+let place = -1;
+let swapping = false;
+
+export function noteRoute(path) {
+  if (history.state?.sheet) return;          // redrawing behind an open panel
+  const known = history.state?.place;
+  if (Number.isInteger(known)) place = known;
+  else {
+    if (!swapping) place += 1;
+    history.replaceState({ ...history.state, place }, '');
+  }
+  swapping = false;
+  trail.length = place + 1;
+  trail[place] = path;
+}
+
+const currentPath = () => location.hash.slice(1) || '/';
+
+// Deeper into the app.
+export const go = (path) => whenReady(() => { location.hash = path; });
+
+// Sideways, to a screen that takes this one's place.
+const swap = (path) => {
+  if (currentPath() === path) return;
+  swapping = true;
+  location.replace(`#${path}`);
 };
+export const swapTo = (path) => whenReady(() => swap(path));
+
+// Up to a screen above this one, so the device's back button agrees with the app's.
+export const goUp = (path) => whenReady(() => {
+  const at = trail.lastIndexOf(path, place - 1);
+  if (at >= 0 && place > 0) history.go(at - place); else swap(path);
+});
 
 /* ---------- overlays ---------- */
 
@@ -62,10 +98,10 @@ export function closeSheet(fromHistory = false) {
 window.addEventListener('popstate', () => {
   if (steppingBack) {
     steppingBack = false;
-    if (goAfter) {
-      const path = goAfter;
-      goAfter = null;
-      location.hash = path;
+    if (thenDo) {
+      const move = thenDo;
+      thenDo = null;
+      move();
     } else if (pushAfter && openSheet) {
       history.pushState({ sheet: 1 }, '');
     }

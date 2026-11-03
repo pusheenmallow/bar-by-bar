@@ -1,10 +1,10 @@
-import { h, go, icon, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
+import { h, goUp, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
 import { get, put, progressMap } from '../store.js';
 import { checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress } from '../model.js';
 import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
-import { missing } from './common.js';
+import { missing, backTo } from './common.js';
 import { practicePicker } from './pick.js';
 
 export async function check([id], ctx) {
@@ -16,7 +16,7 @@ export async function check([id], ctx) {
   if (!stage || !groups.length) {
     return h('main', { class: 'screen' },
       h('p', { class: 'lead' }, 'Nothing is ready for a next-day check yet.'),
-      h('button', { class: 'btn', onClick: () => go(`/piece/${id}`) }, 'Back to my piece'));
+      h('button', { class: 'btn', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece'));
   }
 
   const clock = await new PracticeClock({ piece, bars: groups[0] }).load();
@@ -103,7 +103,7 @@ export async function check([id], ctx) {
           class: 'btn',
           onClick: () => sheet(practicePicker({ piece, bars: [again[0]], progress, stageId: backStage }), { kind: 'bar-sheet' }),
         }, `Practise bar ${again[0].n}`) : null,
-        h('button', { class: 'btn primary', onClick: () => go(`/piece/${id}`) }, 'Back to my piece'))));
+        h('button', { class: 'btn primary', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece'))));
   }
 
   const ro = new ResizeObserver(() => paint());
@@ -118,7 +118,7 @@ export async function check([id], ctx) {
 
   const root = h('main', { class: 'trainer check', vars: { pen: 'var(--tick-gold)' } },
     h('header', { class: 'train-top' },
-      h('button', { class: 'round', 'aria-label': 'Back to the bar map', onClick: () => go(`/piece/${id}`) }, icon('back')),
+      backTo('My piece', `/piece/${id}`),
       title,
       clockView(clock),
       h('span', { class: 'stage-tag' }, h('i', {}), stage.name)),

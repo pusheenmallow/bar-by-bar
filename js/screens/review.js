@@ -1,10 +1,10 @@
-import { h, go, fill, icon, sheet, closeSheet, toast } from '../ui.js';
+import { h, swapTo, fill, icon, sheet, closeSheet, toast } from '../ui.js';
 import { get, put } from '../store.js';
 import { listBars, newId, rowsToLayoutRows } from '../model.js';
 import { findBars } from '../detect-client.js';
 import { pageUrl, forgetPage } from '../images.js';
 import { session } from '../session.js';
-import { busyPanel, stepper, missing } from './common.js';
+import { busyPanel, stepper, missing, backTo } from './common.js';
 import { gate } from './parent.js';
 
 const MIN_GAP = 0.012;
@@ -257,7 +257,7 @@ export async function review([id], ctx) {
       }
       try { await navigator.storage?.persist?.(); } catch { /* the browser decides */ }
     }
-    go(`/piece/${id}`);
+    swapTo(`/parent/bars/${id}`);
   }
 
   ctx.onShow(showPage);
@@ -265,7 +265,7 @@ export async function review([id], ctx) {
 
   return h('main', { class: 'screen review' },
     h('header', { class: 'bar-top' },
-      h('button', { class: 'round', 'aria-label': 'Back', onClick: () => go(piece.draft ? '/parent/add' : `/parent/piece/${id}`) }, icon('back')),
+      piece.draft ? backTo('Add a piece', '/parent/add') : backTo('Piece settings', `/parent/piece/${id}`),
       h('h1', {}, 'Check the boxes')),
     h('p', { class: 'field-hint' }, 'Each box should hold one bar, and the numbers should match the printed ones. Drag a line to move it. Tap a bar to skip, split or join it.'),
     summary, tools, stageEl,

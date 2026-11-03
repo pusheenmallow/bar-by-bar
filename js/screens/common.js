@@ -1,9 +1,21 @@
-import { h, go } from '../ui.js';
+import { h, go, goUp, icon } from '../ui.js';
+import { session } from '../session.js';
 import { SPEEDS, SPEED_STEP, speedTempo, speedPercent } from '../model.js';
 
 export const missing = (text) => h('main', { class: 'screen' },
   h('p', { class: 'lead' }, text),
   h('button', { class: 'btn', onClick: () => go('/') }, 'Back to the start'));
+
+// Back says where it goes, so nobody has to guess.
+export const backTo = (label, path) => h('button', { class: 'back', onClick: () => goUp(path) }, icon('back', 22), h('span', {}, label));
+
+export function leaveGrownUps() {
+  session.parent = false;
+  goUp(session.exitTo);
+}
+
+export const doneButton = () => h('button', { class: 'btn lock', onClick: leaveGrownUps }, 'Done');
+export const grownUpsButton = (path) => h('button', { class: 'round quiet', 'aria-label': 'Grown-ups', onClick: () => go(path) }, icon('lock', 20));
 
 export function stepper({ label, value, min, max, step = 1, onChange, format = (v) => v, compact = false }) {
   const show = h('output', { class: 'step-value' }, format(value));

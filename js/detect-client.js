@@ -20,11 +20,11 @@ function getWorker() {
   return worker;
 }
 
-export function findBars(blob, { corners = null, rotate = 0 } = {}) {
+export function findBars(blob, { corners = null, rotate = 0, autoTurn = false } = {}) {
   return new Promise((resolve, reject) => {
     const id = ++seq;
     waiting.set(id, { resolve, reject });
-    getWorker().postMessage({ id, blob, corners, rotate });
+    getWorker().postMessage({ id, blob, corners, rotate, autoTurn });
   });
 }
 

@@ -72,15 +72,14 @@ export async function addPiece(_, ctx) {
         for (const image of images) {
           status.textContent = `Finding the bars on page ${piece.layout.length + 1}`;
           let found = await findBars(image);
-          let rotate = 0;
           if (!found.rows.length) {                    // a photo taken sideways
-            const turned = await findBars(image, { rotate: 90 });
-            if (turned.rows.length) { found = turned; rotate = 90; }
+            const turned = await findBars(image, { rotate: 90, autoTurn: true });
+            if (turned.rows.length) found = turned;
           }
           const pageId = newId();
           await put('pages', {
             id: pageId, pieceId: piece.id, blob: found.blob, width: found.width, height: found.height,
-            original: image, rotate, corners: found.corners, sourceWidth: found.sourceWidth, sourceHeight: found.sourceHeight,
+            original: image, rotate: found.rotate, corners: found.corners, sourceWidth: found.sourceWidth, sourceHeight: found.sourceHeight,
           });
           piece.layout.push({ pageId, width: found.width, height: found.height, rows: rowsToLayoutRows(found.rows) });
           await save();

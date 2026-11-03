@@ -163,6 +163,9 @@ const quadArea = (q) => {
   return Math.abs(a) / 2;
 };
 
+const TURN_AT = 1.3;               // only used on sideways photos, where either way up is possible
+const MIN_PAGE = 0.07;                // share of the photo a page can fill and still be found
+
 export const fullFrame = (w, h) => [[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]];
 
 export function detectPageCorners(img) {
@@ -198,7 +201,7 @@ export function detectPageCorners(img) {
   mask = morph(morph(mask, w, h, r, true), w, h, r, false);          // cuts thin links to a neighbouring page
 
   const { pts, area } = largestComponent(mask, w, h);
-  if (area / mask.length < 0.2) return { corners: full, found: false };
+  if (area / mask.length < MIN_PAGE) return { corners: full, found: false };
 
   // Fit each side from the middle of the page, where a neighbouring sheet or a shadow
   // touching a corner can't pull the line away.
@@ -229,7 +232,11 @@ export function detectPageCorners(img) {
     clamp((y + 0.5) * step, 0, img.h - 1),
   ]);
   const frac = quadArea(scaled) / (img.w * img.h);
-  if (frac < 0.25 || frac > 0.985) return { corners: full, found: false };
+  if (frac < MIN_PAGE || frac > 0.985) return { corners: full, found: false };
+  // A small sheet in a wide photo, such as a tablet held sideways, must still be page-shaped.
+  const { ratio } = pageShape(scaled);
+  const long = ratio < 1 ? 1 / ratio : ratio;
+  if (frac < 0.25 && (long < 1.15 || long > 1.75)) return { corners: full, found: false };
   return { corners: scaled, found: true };
 }
 
@@ -689,11 +696,53 @@ export function findSystems(img) {
 
 /* ---------- the whole job for one page ---------- */
 
+// A hazy photo has grey blacks, which clean-up would wash out to an empty page.
+function liftContrast(src, sample) {
+  const v = maxChannel(sample);
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < v.length; i++) hist[v[i]]++;
+  const at = (share) => {
+    let seen = 0, level = 0;
+    while (level < 255 && (seen += hist[level]) < v.length * share) level++;
+    return level;
+  };
+  const black = at(0.005), white = at(0.93);
+  if (white < 60 || black / white < 0.4) return;
+  const scale = 255 / (white - black);
+  const { data } = src;
+  for (let p = 0; p < data.length; p += 4) {
+    for (let k = 0; k < 3; k++) {
+      const c = (data[p + k] - black) * scale;
+      data[p + k] = c < 0 ? 0 : c > 255 ? 255 : c;
+    }
+  }
+}
+
+// Piano music has a brace and clef at the left of every line, so more ink sits there than at the right.
+function rightHeaviness(ink, W, systems) {
+  let left = 0, right = 0;
+  const reach = Math.round(W * 0.05);
+  const brace = Math.round(W * 0.014);
+  for (const s of systems) {
+    const x0 = Math.round(s.lines[0]), x1 = Math.round(s.lines[s.lines.length - 1]);
+    for (let y = Math.round(s.y0); y < s.y1; y++) {
+      for (let d = 3; d < reach; d++) {
+        if (d < brace && x0 - d >= 0) left += ink[y * W + x0 - d] * 3;
+        if (d < brace && x1 + d < W) right += ink[y * W + x1 + d] * 3;
+        if (x0 + d < W) left += ink[y * W + x0 + d];
+        if (x1 - d >= 0) right += ink[y * W + x1 - d];
+      }
+    }
+  }
+  return right / Math.max(left, 1);
+}
+
 export function processPage(src, opts = {}) {
   const page = opts.corners ? { corners: opts.corners, found: true } : detectPageCorners(src);
   const shape = pageShape(page.corners);
   const W = WORK_W, H = Math.round(W * clamp(shape.ratio, 0.55, 1.75));
 
+  liftContrast(src, warp(src, page.corners, W, H, null));
   const first = warp(src, page.corners, W, H, null);
   const ink = threshold(evenLight(maxChannel(first), W, H), 185);
   const tilt = estimateTilt(ink, W, H);
@@ -701,6 +750,8 @@ export function processPage(src, opts = {}) {
 
   const level = warp(src, page.corners, W, H, tiltAt);
   const { systems, thr } = findSystems(level);
+
+  const rightHeavy = systems.length ? rightHeaviness(threshold(evenLight(maxChannel(level), W, H), 185), W, systems) : 0;
 
   const outW = Math.round(clamp(shape.across, WORK_W, MAX_OUT_W));
   const outH = Math.round((outW * H) / W);
@@ -713,6 +764,8 @@ export function processPage(src, opts = {}) {
     width: outW,
     height: outH,
     thr,
+    rightHeavy,
+    upsideDown: rightHeavy > TURN_AT,
     rows: systems.map((s) => ({
       top: s.y0 / H,
       bottom: s.y1 / H,

@@ -1,7 +1,6 @@
 // Light or dark, chosen in Grown-ups. These are per-tablet conveniences, so they live in browser
 // storage, which the small script in index.html can read before the first paint.
 const THEME = 'bar-theme';
-const SCORE = 'bar-score';
 const system = matchMedia('(prefers-color-scheme: dark)');
 
 const read = (key, fallback) => {
@@ -12,7 +11,6 @@ const write = (key, value) => {
 };
 
 export const themeChoice = () => read(THEME, 'auto');
-export const scoreChoice = () => read(SCORE, 'dark');
 export const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 function apply() {
@@ -21,13 +19,11 @@ function apply() {
   const root = document.documentElement;
   root.dataset.theme = dark ? 'dark' : 'light';
   root.dataset.choice = choice;
-  root.dataset.score = scoreChoice();
   document.querySelector('meta[name=theme-color]').content = dark ? '#1C1E22' : '#F7F7F4';
   document.querySelector('meta[name=color-scheme]').content = dark ? 'only dark' : 'only light';
   window.dispatchEvent(new Event('themechange'));
 }
 
 export function setTheme(choice) { write(THEME, choice); apply(); }
-export function setScore(mode) { write(SCORE, mode); apply(); }
 
 system.addEventListener('change', apply);

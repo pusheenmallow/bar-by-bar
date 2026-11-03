@@ -1,7 +1,7 @@
 import { h, go, icon, sheet, closeSheet, toast, confirmSheet } from '../ui.js';
 import { all, put, del, byIndex, getMeta, setMeta, exportAll, importAll, progressMap } from '../store.js';
 import { penVar, PLAYER_PENS, newId, playableBars, topStage } from '../model.js';
-import { themeChoice, setTheme, scoreChoice, setScore } from '../theme.js';
+import { themeChoice, setTheme } from '../theme.js';
 import { session } from '../session.js';
 import { isMuted, setMuted } from '../sound.js';
 import { field, busyPanel } from './common.js';
@@ -239,10 +239,7 @@ export async function parentHome(_, ctx) {
           class: `seg ${themeChoice() === id ? 'on' : ''}`,
           'aria-pressed': String(themeChoice() === id),
           onClick: () => { setTheme(id); ctx.rerender(); },
-        }, label))),
-      h('label', { class: 'toggle' },
-        h('input', { type: 'checkbox', checked: scoreChoice() === 'dark', onChange: (e) => setScore(e.target.checked ? 'dark' : 'paper') }),
-        h('span', {}, 'In dark mode, show the music as light ink on dark'))),
+        }, label)))),
 
     h('section', { class: 'block' },
       h('h2', {}, 'Sounds'),

@@ -10,13 +10,12 @@
 <script>
   // Sets the theme before anything draws, so the app never flashes the wrong colours.
   (function () {
-    var choice = 'auto', score = 'dark';
-    try { choice = localStorage.getItem('bar-theme') || 'auto'; score = localStorage.getItem('bar-score') || 'dark'; } catch (e) {}
+    var choice = 'auto';
+    try { choice = localStorage.getItem('bar-theme') || 'auto'; } catch (e) {}
     var dark = choice === 'dark' || (choice === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
     var root = document.documentElement;
     root.dataset.theme = dark ? 'dark' : 'light';
     root.dataset.choice = choice;
-    root.dataset.score = score;
     document.querySelector('meta[name=theme-color]').content = dark ? '#1C1E22' : '#F7F7F4';
     document.querySelector('meta[name=color-scheme]').content = dark ? 'only dark' : 'only light';
   })();

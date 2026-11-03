@@ -69,7 +69,7 @@ export async function mapScreen([id], ctx) {
       const inset = 5, gap = 2, tall = 3;
       const each = (x1 - x0 - inset * 2 - gap * (piece.stages.length - 1)) / piece.stages.length;
       piece.stages.forEach((st, i) => {
-        c.fillStyle = prog.done[st.id] ? cssVar(`--tick-${st.pen}`) : cssVar('--tick-empty');
+        c.fillStyle = prog.done[st.id] ? cssVar(`--mark-${st.pen}`) : cssVar('--mark-empty');
         c.fillRect(x0 + inset + i * (each + gap), y1 - tall - 3, each, tall);
       });
     }

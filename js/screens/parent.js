@@ -194,6 +194,20 @@ export async function parentHome(_, ctx) {
         onClick: () => { session.parent = false; go('/'); },
       }, icon('lock', 22), 'Lock')),
 
+    session.installPrompt && h('section', { class: 'block' },
+      h('h2', {}, 'Install'),
+      h('p', {}, 'Put Bar by Bar on the home screen. It opens like an app and works with no internet.'),
+      h('button', {
+        class: 'btn primary',
+        onClick: async () => {
+          const offer = session.installPrompt;
+          session.installPrompt = null;
+          await offer.prompt();
+          await offer.userChoice;
+          ctx.rerender();
+        },
+      }, 'Install on this tablet')),
+
     h('section', { class: 'block' },
       h('h2', {}, 'Players'),
       players.map((p) => h('button', {

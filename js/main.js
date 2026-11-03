@@ -8,6 +8,7 @@ import { parentHome } from './screens/parent.js';
 import { addPiece } from './screens/add.js';
 import { review } from './screens/review.js';
 import { settings } from './screens/settings.js';
+import { session } from './session.js';
 
 const routes = [
   [/^\/$/, home],
@@ -53,6 +54,10 @@ async function render() {
       h('button', { class: 'btn', onClick: () => { location.hash = '/'; } }, 'Back to the start')));
   }
 }
+
+// Chrome offers installing once it sees the app qualifies. The grown-ups screen shows the button.
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); session.installPrompt = e; });
+window.addEventListener('appinstalled', () => { session.installPrompt = null; });
 
 window.addEventListener('hashchange', render);
 render();

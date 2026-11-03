@@ -1,6 +1,6 @@
 // Keeps the app working with no internet. Scores and progress are never touched here:
 // they stay in the browser's database on this device.
-const VERSION = '5cbd7a9a0d';
+const VERSION = '231a63a5d4';
 const CACHE = `bar-by-bar-${VERSION}`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',

@@ -11,5 +11,5 @@ Run `node scripts/stamp.mjs`, then commit and push. Installed copies will offer 
 ## Third-party files
 
 - [PDF.js](https://mozilla.github.io/pdf.js/) in `vendor/`, Apache License 2.0
-- [Playpen Sans](https://fonts.google.com/specimen/Playpen+Sans) in `fonts/`, SIL Open Font License 1.1
+- [Lexend](https://fonts.google.com/specimen/Lexend) in `fonts/`, SIL Open Font License 1.1
 - Noto Music (music signs only) in `fonts/`, SIL Open Font License 1.1

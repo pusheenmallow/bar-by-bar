@@ -1,6 +1,7 @@
 import { h, go, icon, sheet, closeSheet, toast, confirmSheet } from '../ui.js';
 import { all, put, del, byIndex, getMeta, setMeta, exportAll, importAll, progressMap } from '../store.js';
-import { PENS, PLAYER_PENS, newId, playableBars, topStage } from '../model.js';
+import { penVar, PLAYER_PENS, newId, playableBars, topStage } from '../model.js';
+import { themeChoice, setTheme, scoreChoice, setScore } from '../theme.js';
 import { session } from '../session.js';
 import { isMuted, setMuted } from '../sound.js';
 import { field, busyPanel } from './common.js';
@@ -90,7 +91,7 @@ function playerSheet(existing, done) {
     role: 'radio',
     'aria-checked': String(p === chosen),
     'aria-label': p,
-    style: { background: PENS[p] },
+    style: { background: penVar(p) },
     onClick: () => { chosen = p; paint(); },
   })));
   paint();
@@ -212,7 +213,7 @@ export async function parentHome(_, ctx) {
       h('h2', {}, 'Players'),
       players.map((p) => h('button', {
         class: 'list-row', onClick: () => playerSheet(p, () => ctx.rerender()),
-      }, h('span', { class: 'swatch', style: { background: PENS[p.pen] } }), h('span', { class: 'row-main' }, p.name))),
+      }, h('span', { class: 'swatch', style: { background: penVar(p.pen) } }), h('span', { class: 'row-main' }, p.name))),
       h('button', { class: 'btn', onClick: () => playerSheet(null, () => ctx.rerender()) }, 'Add a player')),
 
     h('section', { class: 'block' },
@@ -230,6 +231,18 @@ export async function parentHome(_, ctx) {
         h('button', { class: 'btn', onClick: () => restoreInput.click() }, 'Restore from a file'),
         restoreInput),
       safe === false ? h('p', { class: 'field-hint' }, 'Install the app on the home screen so the browser keeps this data safe.') : null),
+
+    h('section', { class: 'block' },
+      h('h2', {}, 'Appearance'),
+      h('div', { class: 'mode-row', role: 'group', 'aria-label': 'Theme' },
+        [['auto', 'Match this tablet'], ['light', 'Light'], ['dark', 'Dark']].map(([id, label]) => h('button', {
+          class: `seg ${themeChoice() === id ? 'on' : ''}`,
+          'aria-pressed': String(themeChoice() === id),
+          onClick: () => { setTheme(id); ctx.rerender(); },
+        }, label))),
+      h('label', { class: 'toggle' },
+        h('input', { type: 'checkbox', checked: scoreChoice() === 'dark', onChange: (e) => setScore(e.target.checked ? 'dark' : 'paper') }),
+        h('span', {}, 'In dark mode, show the music as light ink on dark'))),
 
     h('section', { class: 'block' },
       h('h2', {}, 'Sounds'),

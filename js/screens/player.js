@@ -1,12 +1,12 @@
 import { h, go, icon } from '../ui.js';
 import { get, byIndex, progressMap, secondsOn } from '../store.js';
-import { PENS, playableBars, topStage, checkGroups, dayKey, goalSeconds, timeText } from '../model.js';
+import { penVar, playableBars, topStage, checkGroups, dayKey, goalSeconds, timeText } from '../model.js';
 import { missing } from './common.js';
 
 function strip(piece, bars, progress) {
   return h('div', { class: 'strip', 'aria-hidden': 'true' }, bars.map((b) => {
     const top = topStage(piece, progress.get(b.id));
-    return h('i', { style: top ? { background: PENS[top.pen] } : {} });
+    return h('i', { style: top ? { background: penVar(top.pen) } : {} });
   }));
 }
 
@@ -33,7 +33,7 @@ export async function player([id]) {
       h('span', { class: 'piece-sub' }, goal ? `${timeText(today)} of ${timeText(goal)} today` : `${timeText(today)} today`)));
   }
 
-  return h('main', { class: 'screen player', vars: { pen: PENS[person.pen] } },
+  return h('main', { class: 'screen player', vars: { pen: penVar(person.pen) } },
     h('header', { class: 'bar-top' },
       h('button', { class: 'round', 'aria-label': 'Back', onClick: () => go('/') }, icon('back')),
       h('h1', { class: 'name-title' }, h('span', {}, person.name))),

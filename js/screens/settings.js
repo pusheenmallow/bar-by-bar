@@ -1,6 +1,6 @@
 import { h, go, icon, confirmSheet } from '../ui.js';
 import { get, put, all, byIndex, deletePiece } from '../store.js';
-import { KEYS, PENS, listBars, mistakeList, newId, nextPen } from '../model.js';
+import { KEYS, penVar, listBars, mistakeList, newId, nextPen } from '../model.js';
 import { session } from '../session.js';
 import { field, stepper, missing } from './common.js';
 import { gate } from './parent.js';
@@ -50,7 +50,7 @@ export async function settings([id], ctx) {
     stageList.replaceChildren(...piece.stages.map((s, i) => {
       const locked = s.pace === 'nextday';
       return h('div', { class: 'stage-line' },
-        h('span', { class: 'swatch', style: { background: PENS[s.pen] } }),
+        h('span', { class: 'swatch', style: { background: penVar(s.pen) } }),
         h('input', {
           type: 'text', value: s.name, 'aria-label': `Stage ${i + 1} name`,
           onChange: (e) => { s.name = e.target.value.trim() || s.name; e.target.value = s.name; save(); },

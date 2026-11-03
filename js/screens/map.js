@@ -1,16 +1,17 @@
-import { h, go, fill, icon, pen, sticker, sheet, closeSheet, seeded, strokePath } from '../ui.js';
+import { h, go, fill, icon, sticker, sheet, closeSheet } from '../ui.js';
 import { get, put, progressMap, timeDocs, dayTotal, timeSaved } from '../store.js';
 import {
-  PENS, listBars, playableBars, blankProgress, nextStage, practiceStages, checkStage, waitingForCheck,
+  penVar, listBars, playableBars, blankProgress, nextStage, practiceStages, checkStage, waitingForCheck,
   checkGroups, topStage, dayKey, barsLabel, newId, goalSeconds, timeText, clockText, numberRanges,
 } from '../model.js';
 import { drawBars } from '../images.js';
+import { cssVar } from '../theme.js';
 import { session } from '../session.js';
 import { missing, stepper } from './common.js';
 import { scorePages, layer, hitPlace } from './score.js';
 
 const MAX_CHUNK = 12;
-const TINTS = ['#EFE8FF', '#DCCBFF', '#C4A8FF', '#A985F5'];        // one hue, deeper means more time
+const HEAT_STEPS = 4;              // one hue in the stylesheet: stronger means more time
 
 export async function mapScreen([id], ctx) {
   const piece = await get('pieces', id);
@@ -38,7 +39,7 @@ export async function mapScreen([id], ctx) {
 
   const { el: pagesEl, views } = await scorePages(piece, bars);
 
-  const timeBin = (seconds) => Math.min(TINTS.length - 1, Math.floor((seconds / mostTime) * TINTS.length));
+  const timeBin = (seconds) => Math.min(HEAT_STEPS - 1, Math.floor((seconds / mostTime) * HEAT_STEPS));
 
   function draw(view) {
     const pad = layer(view);
@@ -47,27 +48,29 @@ export async function mapScreen([id], ctx) {
     for (const bar of view.bars) {
       const { x0, x1, y0, y1 } = px(bar);
       if (bar.skip) {
-        c.fillStyle = '#D9DCE0';
+        c.fillStyle = cssVar('--skip');
         c.fillRect(x0, y0, x1 - x0, y1 - y0);
         continue;
       }
       if (viewing === 'time') {
         const seconds = barTime.get(bar.id);
         if (!seconds) continue;
-        c.fillStyle = TINTS[timeBin(seconds)];
+        c.fillStyle = cssVar(`--heat-${timeBin(seconds) + 1}`);
         c.fillRect(x0, y0, x1 - x0, y1 - y0);
         continue;
       }
       const prog = progress.get(bar.id);
-      if (!prog) continue;
-      const band = (y1 - y0) / piece.stages.length;
+      const top = topStage(piece, prog);
+      if (!top) continue;
+
+      // A soft wash in the furthest stage's colour, and a thin line of stages along the bottom.
+      c.fillStyle = cssVar(`--wash-${top.pen}`);
+      c.fillRect(x0, y0, x1 - x0, y1 - y0);
+      const inset = 5, gap = 2, tall = 3;
+      const each = (x1 - x0 - inset * 2 - gap * (piece.stages.length - 1)) / piece.stages.length;
       piece.stages.forEach((st, i) => {
-        if (!prog.done[st.id]) return;
-        const rand = seeded(bar.id + st.id);
-        const topEdge = y0 + band * i;
-        strokePath(c, x0 + 1, x1 - 1, topEdge - 1, topEdge + band + 1, rand, Math.max(1.5, band * 0.14));
-        c.fillStyle = PENS[st.pen];
-        c.fill();
+        c.fillStyle = prog.done[st.id] ? cssVar(`--tick-${st.pen}`) : cssVar('--tick-empty');
+        c.fillRect(x0 + inset + i * (each + gap), y1 - tall - 3, each, tall);
       });
     }
   }
@@ -103,7 +106,7 @@ export async function mapScreen([id], ctx) {
         prog?.runSlip ? h('span', { class: 'mark slipped', title: 'Slipped in the whole piece' }, '!') : null,
         prog?.flagged && h('span', { class: 'mark flag' }, icon('flag', 18)),
         prog?.notes.length ? h('span', { class: 'mark note' }, icon('note', 18)) : null,
-        checked && h('span', { class: 'mark star' }, sticker(26))));
+        checked && h('span', { class: 'mark star' }, sticker(20))));
     }));
   }
 
@@ -115,7 +118,7 @@ export async function mapScreen([id], ctx) {
       trayEl.replaceChildren(h('div', { class: 'time-key' },
         h('span', { class: 'tray-name' }, `Total ${timeText(totalTime)}`),
         h('span', { class: 'tray-count' }, 'Less'),
-        TINTS.map((t) => h('i', { style: { background: t } })),
+        [1, 2, 3, 4].map((n) => h('i', { style: { background: `var(--heat-${n})` } })),
         h('span', { class: 'tray-count' }, 'More'),
         h('span', { class: 'tray-count key-note' }, 'Phrase and whole-piece time is shared evenly across the bars played.')));
       return;
@@ -125,7 +128,7 @@ export async function mapScreen([id], ctx) {
       class: `tray-pen ${painting === s.id ? 'active' : ''}`,
       'aria-pressed': parent ? String(painting === s.id) : null,
       onClick: parent ? () => { painting = painting === s.id ? null : s.id; tray(); hint(); } : null,
-    }, pen(PENS[s.pen], 30), h('span', { class: 'tray-name' }, s.name), h('span', { class: 'tray-count' }, `${c[i]} of ${playable.length}`))));
+    }, h('i', { class: 'tray-swatch', style: { background: penVar(s.pen) } }), h('span', { class: 'tray-name' }, s.name), h('span', { class: 'tray-count' }, `${c[i]} of ${playable.length}`))));
   }
 
   /* ---------- how to practise ---------- */
@@ -160,14 +163,14 @@ export async function mapScreen([id], ctx) {
     const nudge = goal && todaySeconds >= goal * 0.7 && !(today?.modes.piece > 0) && playable.length > 2;
     let content = [];
     if (count) {
-      content = [sticker(46), h('p', {}, `${count} ${count === 1 ? 'bar is' : 'bars are'} ready for a next-day check.`),
+      content = [sticker(34), h('p', {}, `${count} ${count === 1 ? 'bar is' : 'bars are'} ready for a next-day check.`),
         h('button', { class: 'btn primary', onClick: () => go(`/check/${id}`) }, 'Start check')];
     } else if (slipped.length) {
       content = [h('span', { class: 'mark slipped big' }, '!'),
         h('p', {}, `${slipped.length === 1 ? 'Bar' : 'Bars'} ${numberRanges(slipped.map((b) => b.n))} slipped in the whole piece.`),
         h('button', { class: 'btn primary', onClick: () => openBar(slipped[0]) }, `Fix bar ${slipped[0].n}`)];
     } else if (nudge) {
-      content = [sticker(46), h('p', {}, 'Nearly at today’s goal. Finish with the whole piece?'),
+      content = [sticker(34), h('p', {}, 'Nearly at today’s goal. Finish with the whole piece?'),
         h('button', { class: 'btn primary', onClick: () => go(`/whole/${id}`) }, 'Whole piece')];
     }
     bannerEl.replaceChildren(...(content.length ? [h('div', { class: 'banner' }, content)] : []));
@@ -249,7 +252,7 @@ export async function mapScreen([id], ctx) {
         'aria-pressed': select ? String(chosen === s.id) : null,
         onClick: select,
       },
-      h('span', { class: 'swatch', style: { background: PENS[s.pen] } }),
+      h('span', { class: 'swatch', style: { background: penVar(s.pen) } }),
       h('span', { class: 'stage-name' }, s.name),
       h('span', { class: 'stage-status' }, status),
       parent && h('input', {
@@ -348,8 +351,16 @@ export async function mapScreen([id], ctx) {
   }
 
   const ro = new ResizeObserver(() => views.forEach(draw));
-  ctx.onShow(() => { views.forEach((v) => ro.observe(v.box)); refresh(); });
-  ctx.onLeave(() => ro.disconnect());
+  const redraw = () => views.forEach(draw);
+  ctx.onShow(() => {
+    views.forEach((v) => ro.observe(v.box));
+    refresh();
+    window.addEventListener('themechange', redraw);
+  });
+  ctx.onLeave(() => {
+    ro.disconnect();
+    window.removeEventListener('themechange', redraw);
+  });
 
   return h('main', { class: 'screen map' },
     h('header', { class: 'bar-top' },

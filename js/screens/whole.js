@@ -1,12 +1,13 @@
 import { h, go, icon, sticker, toast } from '../ui.js';
 import { get, put, progressMap } from '../store.js';
 import {
-  PENS, listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, barsLabel,
+  listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, barsLabel,
   nextStage, practiceStages, numberRanges,
 } from '../model.js';
 import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { stickOn, fanfare } from '../sound.js';
+import { cssVar } from '../theme.js';
 import { missing } from './common.js';
 import { scorePages, layer, hitPlace } from './score.js';
 
@@ -39,10 +40,10 @@ export async function whole([id], ctx) {
     for (const bar of view.bars) {
       const { x0, x1, y0, y1 } = px(bar);
       if (bar.skip) {
-        c.fillStyle = '#D9DCE0';
+        c.fillStyle = cssVar('--skip');
         c.fillRect(x0, y0, x1 - x0, y1 - y0);
       } else if (slipped.has(bar.id)) {
-        c.fillStyle = PENS.gum;
+        c.fillStyle = cssVar('--wash-gum');
         c.fillRect(x0, y0, x1 - x0, y1 - y0);
       }
     }
@@ -159,7 +160,7 @@ export async function whole([id], ctx) {
     if (!list.length) fanfare();
     root.className = 'screen finish';
     root.replaceChildren(h('div', { class: 'finish-body' },
-      !list.length && h('div', { class: 'cheer' }, sticker(120)),
+      !list.length && h('div', { class: 'cheer' }, sticker(76)),
       h('h1', { class: 'center' }, list.length ? `${list.length} ${list.length === 1 ? 'bar' : 'bars'} to look at` : 'Clean all the way!'),
       h('p', { class: 'center lead' }, list.length
         ? `Bars ${numberRanges(list.map((b) => b.n))} slipped. You played for ${clockText(took)}.`.replace(/^Bars (\d+) /, 'Bar $1 ')
@@ -171,13 +172,16 @@ export async function whole([id], ctx) {
   }
 
   const ro = new ResizeObserver(() => views.forEach(draw));
+  const redraw = () => views.forEach(draw);
   let letSleep = () => {};
   ctx.onShow(() => {
     views.forEach((v) => { ro.observe(v.box); draw(v); chips(v); });
     footer();
     letSleep = stayAwake(clock, met);
+    window.addEventListener('themechange', redraw);
   });
   ctx.onLeave(() => {
+    window.removeEventListener('themechange', redraw);
     ro.disconnect();
     clearInterval(tick);
     clock.stop();

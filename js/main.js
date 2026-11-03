@@ -1,4 +1,5 @@
-import { h, closeSheet, toast } from './ui.js';
+import { h, closeSheet } from './ui.js';
+import './theme.js';
 import { home } from './screens/home.js';
 import { player } from './screens/player.js';
 import { mapScreen } from './screens/map.js';

@@ -1,13 +1,14 @@
-import { h, go, icon, sheet, closeSheet, replaceSheet, sticker, seeded, strokePath, toast } from '../ui.js';
+import { h, go, icon, sheet, closeSheet, replaceSheet, sticker, toast } from '../ui.js';
 import { get, put, progressMap } from '../store.js';
 import {
-  PENS, listBars, barsLabel, blankProgress, mistakeList, practiceStages, startTempo, clampTempo,
+  penVar, listBars, barsLabel, blankProgress, mistakeList, practiceStages, startTempo, clampTempo,
   easierTempo, fasterTempo, afterClean, afterSlip, stageNeedsSpeed,
 } from '../model.js';
 import { drawBars } from '../images.js';
 import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { stickOn, peelOff, fanfare } from '../sound.js';
+import { cssVar } from '../theme.js';
 import { missing } from './common.js';
 
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -79,8 +80,7 @@ export async function trainer([id, csv, stageId], ctx) {
       const filled = i < run.tokens;
       const has = !!slot.querySelector('.sticker');
       if (filled && !has) {
-        const tilt = (seeded(`${Date.now()}${i}`)() - 0.5) * 24;
-        slot.append(h('span', { class: `sticker ${change === 'clean' ? 'slap' : ''}`, vars: { tilt: `${tilt}deg` } }, sticker(68)));
+        slot.append(h('span', { class: `sticker ${change === 'clean' ? 'slap' : ''}` }, sticker(52)));
       } else if (!filled && has) {
         const s = slot.querySelector('.sticker');
         s.classList.add('peel');
@@ -166,7 +166,7 @@ export async function trainer([id, csv, stageId], ctx) {
     const next = after[after.findIndex((s) => s.id === stage.id) + 1];
     const label = barsLabel(bars);
     sheet([
-      h('div', { class: 'cheer' }, sticker(110)),
+      h('div', { class: 'cheer' }, sticker(76)),
       h('h2', { class: 'center' }, `${stage.name} done!`),
       h('p', { class: 'center' }, `${label} ${bars.length === 1 ? 'is' : 'are'} coloured in.`),
       h('div', { class: 'row-buttons' },
@@ -178,7 +178,7 @@ export async function trainer([id, csv, stageId], ctx) {
     ], { dismiss: false });
   }
 
-  // The stage's pen sweeps across the bar.
+  // The stage's colour wipes across the music.
   function swipe() {
     return new Promise((resolve) => {
       if (!lastDraw) { resolve(); return; }
@@ -188,31 +188,14 @@ export async function trainer([id, csv, stageId], ctx) {
       fx.style.width = `${cssW}px`; fx.style.height = `${cssH}px`;
       const c = fx.getContext('2d');
       c.scale(dpr, dpr);
-      const rand = seeded(stage.id + csv);
-      const strokes = Array.from({ length: 3 }, (_, i) => ({ y0: (cssH / 3) * i - 3, y1: (cssH / 3) * (i + 1) + 3, seed: rand() }));
-      const paintAt = (t) => {
-        c.clearRect(0, 0, cssW, cssH);
-        c.fillStyle = PENS[stage.pen];
-        strokes.forEach((s, i) => {
-          const local = Math.min(1, Math.max(0, t * 3 - i));
-          if (!local) return;
-          const fromRight = i % 2 === 1;
-          c.save();
-          c.beginPath();
-          if (fromRight) c.rect(cssW * (1 - local), s.y0 - 8, cssW * local, s.y1 - s.y0 + 16);
-          else c.rect(0, s.y0 - 8, cssW * local, s.y1 - s.y0 + 16);
-          c.clip();
-          strokePath(c, 4, cssW - 4, s.y0, s.y1, seeded(String(s.seed)), 5);
-          c.fill();
-          c.restore();
-        });
-      };
+      c.fillStyle = cssVar(`--wash-${stage.pen}`);
+      const paintAt = (t) => { c.clearRect(0, 0, cssW, cssH); c.fillRect(0, 0, cssW * t, cssH); };
       if (calm()) { paintAt(1); setTimeout(resolve, 200); return; }
       const began = performance.now();
       const step = (now) => {
-        const t = Math.min(1, (now - began) / 900);
-        paintAt(t);
-        if (t < 1) requestAnimationFrame(step); else setTimeout(resolve, 260);
+        const t = Math.min(1, (now - began) / 560);
+        paintAt(1 - (1 - t) ** 3);
+        if (t < 1) requestAnimationFrame(step); else setTimeout(resolve, 240);
       };
       requestAnimationFrame(step);
     });
@@ -298,12 +281,12 @@ export async function trainer([id, csv, stageId], ctx) {
 
   const title = h('h1', {}, barsLabel(bars));
 
-  return h('main', { class: 'trainer', vars: { pen: PENS[stage.pen] } },
+  return h('main', { class: 'trainer', vars: { pen: penVar(stage.pen) } },
     h('header', { class: 'train-top' },
       h('button', { class: 'round', 'aria-label': 'Back to the bar map', onClick: leave }, icon('back')),
       title,
       clockView(clock),
-      h('span', { class: 'stage-tag' }, stage.name)),
+      h('span', { class: 'stage-tag' }, h('i', {}), stage.name)),
     cropBox,
     h('section', { class: 'train-side' },
       h('p', { class: 'goal' }, stage.hint, stage.dynamics ? ' Dynamics count.' : ''),

@@ -1,15 +1,7 @@
 // The rules of the app, kept apart from the screens.
 
-export const PENS = {
-  sky: '#79D2FF',
-  grape: '#C4A1FF',
-  gum: '#FF9CCB',
-  lemon: '#FFE84A',
-  lime: '#B4EE45',
-  gold: '#FFC02E',
-  peach: '#FFB98A',
-  mint: '#7FEBC8',
-};
+// Pen colours live in the stylesheet, one set for each theme.
+export const penVar = (pen) => `var(--tick-${pen})`;
 export const PLAYER_PENS = ['sky', 'grape', 'gum', 'lemon', 'lime', 'mint'];
 const STAGE_PEN_ORDER = ['sky', 'grape', 'gum', 'lemon', 'lime', 'gold', 'peach', 'mint'];
 
@@ -163,9 +155,9 @@ export function checkGroups(piece, progress, now = Date.now(), size = 4) {
 
 export const practiceMode = (count) => (count <= 2 ? 'bar' : 'phrase');
 export const MODES = [
-  { id: 'bar', name: 'Short bars', colour: '#3F27B0', ink: '#FFFFFF' },
-  { id: 'phrase', name: 'Phrases', colour: '#7052E0', ink: '#FFFFFF' },
-  { id: 'piece', name: 'Whole piece', colour: '#AC92F5', ink: '#2F3237' },
+  { id: 'bar', name: 'Short bars', colour: 'var(--mode-1)', ink: 'var(--mode-1-ink)' },
+  { id: 'phrase', name: 'Phrases', colour: 'var(--mode-2)', ink: 'var(--mode-2-ink)' },
+  { id: 'piece', name: 'Whole piece', colour: 'var(--mode-3)', ink: 'var(--mode-3-ink)' },
 ];
 export const goalSeconds = (piece) => (piece.dailyGoal ?? 10) * 60;
 

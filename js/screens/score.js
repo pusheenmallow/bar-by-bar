@@ -31,7 +31,6 @@ export function layer(view) {
   canvas.height = Math.round(height * dpr);
   const c = canvas.getContext('2d');
   c.scale(dpr, dpr);
-  c.globalCompositeOperation = 'multiply';
   const px = (b) => ({ x0: b.x0 * w, x1: b.x1 * w, y0: ((b.y0 - top) / span) * height, y1: ((b.y1 - top) / span) * height });
   return { c, px };
 }

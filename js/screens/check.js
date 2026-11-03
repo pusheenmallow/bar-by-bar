@@ -94,7 +94,7 @@ export async function check([id], ctx) {
     const backStage = piece.stages[piece.stages.findIndex((s) => s.id === stage.id) - 1]?.id || stage.id;
     root.className = 'screen finish';
     root.replaceChildren(h('div', { class: 'finish-body' },
-      h('div', { class: 'cheer' }, sticker(120)),
+      h('div', { class: 'cheer' }, sticker(76)),
       h('h1', { class: 'center' }, passed === 1 ? '1 bar stuck' : `${passed} bars stuck`),
       again.length ? h('p', { class: 'center lead' }, `${again.length === 1 ? `Bar ${again[0].n} needs` : `Bars ${again.map((b) => b.n).join(', ')} need`} a bit more. Try again tomorrow.`) : null,
       h('div', { class: 'row-buttons narrow' },
@@ -112,12 +112,12 @@ export async function check([id], ctx) {
   });
   ctx.onLeave(() => { ro.disconnect(); clock.stop(); letSleep(); });
 
-  const root = h('main', { class: 'trainer check', vars: { pen: '#FFC02E' } },
+  const root = h('main', { class: 'trainer check', vars: { pen: 'var(--tick-gold)' } },
     h('header', { class: 'train-top' },
       h('button', { class: 'round', 'aria-label': 'Back to the bar map', onClick: () => go(`/piece/${id}`) }, icon('back')),
       title,
       clockView(clock),
-      h('span', { class: 'stage-tag' }, stage.name)),
+      h('span', { class: 'stage-tag' }, h('i', {}), stage.name)),
     cropBox,
     h('section', { class: 'train-side' },
       h('p', { class: 'goal' }, 'One go, first try. No warm-up.'),

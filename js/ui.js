@@ -151,58 +151,15 @@ export function icon(name, size = 28) {
     h('svg:path', { d: paths[name] }));
 }
 
-// The star sticker a teacher puts on the page.
+// The gold star a teacher puts on the page.
 export function sticker(size = 72, label) {
-  const pts = [];
-  for (let i = 0; i < 28; i++) {
-    const r = i % 2 ? 46 : 50;
-    const a = (i / 28) * Math.PI * 2;
-    pts.push(`${(50 + r * Math.cos(a)).toFixed(1)},${(50 + r * Math.sin(a)).toFixed(1)}`);
-  }
   const star = [];
   for (let i = 0; i < 10; i++) {
-    const r = i % 2 ? 15 : 33;
+    const r = i % 2 ? 13 : 30;
     const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
     star.push(`${(50 + r * Math.cos(a)).toFixed(1)},${(52 + r * Math.sin(a)).toFixed(1)}`);
   }
   return h('svg:svg', { viewBox: '0 0 100 100', width: size, height: size, class: 'sticker-art', role: label ? 'img' : null, 'aria-label': label || null, 'aria-hidden': label ? null : 'true' },
-    h('svg:polygon', { points: pts.join(' '), fill: '#FFC02E', stroke: '#2F3237', 'stroke-width': 3, 'stroke-linejoin': 'round' }),
-    h('svg:polygon', { points: star.join(' '), fill: '#FFF6D6', stroke: '#2F3237', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
-}
-
-export function pen(colour, size = 44) {
-  return h('svg:svg', { viewBox: '0 0 64 26', width: size * 1.6, height: size * 0.65, class: 'pen-art', 'aria-hidden': 'true' },
-    h('svg:path', { d: 'M2 5q1-3 4-3h34q3 0 3 3v16q0 3-3 3H6q-3 0-4-3z', fill: '#fff', stroke: '#2F3237', 'stroke-width': 2.2 }),
-    h('svg:path', { d: 'M43 6l9 1q2 0 2 2v8q0 2-2 2l-9 1z', fill: colour, stroke: '#2F3237', 'stroke-width': 2.2, 'stroke-linejoin': 'round' }),
-    h('svg:path', { d: 'M54 10l8 1v5l-8 2z', fill: colour, stroke: '#2F3237', 'stroke-width': 2.2, 'stroke-linejoin': 'round' }),
-    h('svg:rect', { x: 8, y: 9, width: 28, height: 8, rx: 3, fill: colour }));
-}
-
-export function seeded(seedText) {
-  let hash = 2166136261;
-  for (let i = 0; i < seedText.length; i++) { hash ^= seedText.charCodeAt(i); hash = Math.imul(hash, 16777619); }
-  return () => {
-    hash |= 0; hash = (hash + 0x6d2b79f5) | 0;
-    let t = Math.imul(hash ^ (hash >>> 15), 1 | hash);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// One rough highlighter stroke, as a canvas path.
-export function strokePath(ctx, x0, x1, y0, y1, rand, wobble = 2) {
-  const steps = Math.max(5, Math.round((x1 - x0) / 34));
-  const lean = (rand() - 0.5) * wobble * 3;
-  ctx.beginPath();
-  ctx.moveTo(x0 + (rand() - 0.5) * wobble * 2, y0 + rand() * wobble);
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps;
-    ctx.lineTo(x0 + (x1 - x0) * t, y0 + lean * t + (rand() - 0.5) * wobble);
-  }
-  ctx.lineTo(x1 + (rand() - 0.5) * wobble * 3, (y0 + y1) / 2 + lean / 2);
-  for (let i = steps; i >= 0; i--) {
-    const t = i / steps;
-    ctx.lineTo(x0 + (x1 - x0) * t, y1 + lean * t + (rand() - 0.5) * wobble);
-  }
-  ctx.closePath();
+    h('svg:circle', { cx: 50, cy: 50, r: 48, class: 'sticker-disc' }),
+    h('svg:polygon', { points: star.join(' '), class: 'sticker-star' }));
 }

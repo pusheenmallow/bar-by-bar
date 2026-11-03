@@ -3,6 +3,7 @@ import { get, put, progressMap } from '../store.js';
 import { checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress } from '../model.js';
 import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
+import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { missing } from './common.js';
 
 export async function check([id], ctx) {
@@ -17,6 +18,7 @@ export async function check([id], ctx) {
       h('button', { class: 'btn', onClick: () => go(`/piece/${id}`) }, 'Back to my piece'));
   }
 
+  const clock = await new PracticeClock({ piece, bars: groups[0] }).load();
   let index = 0, passed = 0;
   const again = [];
   const crop = h('canvas', {});
@@ -41,7 +43,14 @@ export async function check([id], ctx) {
 
   const advance = () => {
     index += 1;
-    if (index < groups.length) { title.textContent = barsLabel(groups[index]); paint(); } else finish();
+    if (index < groups.length) {
+      clock.setBars(groups[index]);
+      title.textContent = barsLabel(groups[index]);
+      paint();
+    } else {
+      clock.stop();
+      finish();
+    }
   };
 
   async function clean() {
@@ -94,13 +103,20 @@ export async function check([id], ctx) {
   }
 
   const ro = new ResizeObserver(() => paint());
-  ctx.onShow(() => { title.textContent = barsLabel(groups[0]); ro.observe(cropBox); });
-  ctx.onLeave(() => ro.disconnect());
+  let letSleep = () => {};
+  ctx.onShow(() => {
+    title.textContent = barsLabel(groups[0]);
+    ro.observe(cropBox);
+    letSleep = stayAwake(clock);
+    clock.start();
+  });
+  ctx.onLeave(() => { ro.disconnect(); clock.stop(); letSleep(); });
 
   const root = h('main', { class: 'trainer check', vars: { pen: '#FFC02E' } },
     h('header', { class: 'train-top' },
       h('button', { class: 'round', 'aria-label': 'Back to the bar map', onClick: () => go(`/piece/${id}`) }, icon('back')),
       title,
+      clockView(clock),
       h('span', { class: 'stage-tag' }, stage.name)),
     cropBox,
     h('section', { class: 'train-side' },

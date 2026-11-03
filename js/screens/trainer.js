@@ -6,6 +6,7 @@ import {
 } from '../model.js';
 import { drawBars } from '../images.js';
 import { Metronome } from '../metronome.js';
+import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { stickOn, peelOff, fanfare } from '../sound.js';
 import { missing } from './common.js';
 
@@ -23,6 +24,8 @@ export async function trainer([id, csv, stageId], ctx) {
 
   let run = { tokens: 0, slipsInRow: 0 };
   let tempo = startTempo(piece, stage, bars, progress);
+  const clock = await new PracticeClock({ piece, bars }).load();
+  clock.onGoal = () => { stickOn(); toast('That’s today’s time done. Finish what you’re on, or keep going.'); };
   const met = new Metronome();
   met.bpm = tempo;
   met.beats = piece.beats || 4;
@@ -43,9 +46,11 @@ export async function trainer([id, csv, stageId], ctx) {
     Array.from({ length: met.beats }, (_, i) => h('i', { class: i === 0 ? 'first' : '' })));
   met.onBeat = (beat) => {
     [...dots.children].forEach((d, i) => d.classList.toggle('on', i === beat));
+    if (beat < 0) showMetronomeOff();
   };
   const tempoEl = h('output', { class: 'tempo-value' }, tempo);
   function setTempo(v) {
+    clock.touch();
     tempo = clampTempo(v);
     met.bpm = tempo;
     tempoEl.textContent = tempo;
@@ -53,11 +58,17 @@ export async function trainer([id, csv, stageId], ctx) {
   const startBtn = h('button', {
     class: 'btn met-toggle',
     onClick: async () => {
-      if (met.running) met.stop(); else await met.start();
-      startBtn.replaceChildren(icon(met.running ? 'stop' : 'play', 24), met.running ? 'Stop' : 'Metronome');
-      startBtn.classList.toggle('running', met.running);
+      clock.touch();
+      if (met.running) { met.stop(); return; }
+      await met.start();
+      startBtn.replaceChildren(icon('stop', 24), 'Stop');
+      startBtn.classList.add('running');
     },
   }, icon('play', 24), 'Metronome');
+  function showMetronomeOff() {
+    startBtn.replaceChildren(icon('play', 24), 'Metronome');
+    startBtn.classList.remove('running');
+  }
 
   /* ---------- the stickers ---------- */
   const slots = h('div', { class: 'slots', role: 'img' });
@@ -109,6 +120,7 @@ export async function trainer([id, csv, stageId], ctx) {
       toast('Start the metronome first. This stage is at full speed.');
       return;
     }
+    clock.touch();
     run = afterClean(run);
     showTokens('clean');
     stickOn();
@@ -118,6 +130,10 @@ export async function trainer([id, csv, stageId], ctx) {
 
   async function finishRun() {
     await saveBest();
+    for (const b of bars) {                     // this run settles any slip from the whole piece
+      const p = progress.get(b.id);
+      if (p?.runSlip) { p.runSlip = 0; await put('progress', p); }
+    }
     if (stageNeedsSpeed(piece, stage, tempo)) {
       const up = fasterTempo(tempo, piece.tempo);
       sheet([
@@ -137,8 +153,6 @@ export async function trainer([id, csv, stageId], ctx) {
 
   async function celebrate() {
     met.stop();
-    startBtn.replaceChildren(icon('play', 24), 'Metronome');
-    startBtn.classList.remove('running');
     const now = Date.now();
     for (const b of bars) {
       const p = progress.get(b.id) || blankProgress(id, b.id);
@@ -206,6 +220,7 @@ export async function trainer([id, csv, stageId], ctx) {
 
   /* ---------- slip ---------- */
   function slip() {
+    clock.touch();
     run = afterSlip(run);
     showTokens('slip');
     peelOff();
@@ -230,6 +245,7 @@ export async function trainer([id, csv, stageId], ctx) {
           onClick: () => {
             closeSheet();
             bars = part;
+            clock.setBars(part);
             title.textContent = barsLabel(bars);
             run.slipsInRow = 0;
             paint();
@@ -264,24 +280,20 @@ export async function trainer([id, csv, stageId], ctx) {
   /* ---------- leaving ---------- */
   function leave() { go(`/piece/${id}`); }
 
-  let lock = null;
-  const keepAwake = async () => {
-    try { lock = await navigator.wakeLock?.request('screen'); } catch { lock = null; }
-  };
-  const onVisible = () => { if (document.visibilityState === 'visible') keepAwake(); else met.stop(); };
+  let letSleep = () => {};
 
   const ro = new ResizeObserver(() => paint());
   ctx.onShow(() => {
     ro.observe(cropBox);
-    keepAwake();
-    document.addEventListener('visibilitychange', onVisible);
+    letSleep = stayAwake(clock, met);
     showTokens();
+    clock.start();
   });
   ctx.onLeave(() => {
     ro.disconnect();
+    clock.stop();
     met.dispose();
-    lock?.release?.();
-    document.removeEventListener('visibilitychange', onVisible);
+    letSleep();
   });
 
   const title = h('h1', {}, barsLabel(bars));
@@ -290,6 +302,7 @@ export async function trainer([id, csv, stageId], ctx) {
     h('header', { class: 'train-top' },
       h('button', { class: 'round', 'aria-label': 'Back to the bar map', onClick: leave }, icon('back')),
       title,
+      clockView(clock),
       h('span', { class: 'stage-tag' }, stage.name)),
     cropBox,
     h('section', { class: 'train-side' },

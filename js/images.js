@@ -47,10 +47,14 @@ export async function drawBars(canvas, bars, box) {
   const widths = cuts.map((c) => c.sw * (height / c.sh));
   const gap = height * 0.06;
 
-  // Longer chunks read better on two lines when the screen is tall.
-  const half = Math.ceil(cuts.length / 2);
-  const plans = [[cuts.map((_, i) => i)]];
-  if (cuts.length > 1) plans.push([cuts.slice(0, half).map((_, i) => i), cuts.slice(half).map((_, i) => i + half)]);
+  // Longer chunks read better over a few lines when the screen is tall.
+  const plans = [];
+  for (let count = 1; count <= Math.min(4, cuts.length); count++) {
+    const perLine = Math.ceil(cuts.length / count);
+    const lines = [];
+    for (let i = 0; i < cuts.length; i += perLine) lines.push(cuts.slice(i, i + perLine).map((_, k) => i + k));
+    plans.push(lines);
+  }
   const measure = (lines) => {
     const across = Math.max(...lines.map((line) => line.reduce((sum, i) => sum + widths[i], 0)));
     const down = lines.length * height + (lines.length - 1) * gap;

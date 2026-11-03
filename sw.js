@@ -1,12 +1,13 @@
 // Keeps the app working with no internet. Scores and progress are never touched here:
 // they stay in the browser's database on this device.
-const VERSION = '231a63a5d4';
+const VERSION = '2ae1ee7df2';
 const CACHE = `bar-by-bar-${VERSION}`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
-  'js/main.js', 'js/ui.js', 'js/model.js', 'js/store.js', 'js/session.js', 'js/images.js', 'js/metronome.js', 'js/sound.js',
+  'js/main.js', 'js/ui.js', 'js/model.js', 'js/store.js', 'js/session.js', 'js/images.js', 'js/metronome.js', 'js/sound.js', 'js/clock.js',
   'js/detect-client.js', 'js/detect-core.js', 'js/detect-worker.js',
   'js/screens/home.js', 'js/screens/player.js', 'js/screens/map.js', 'js/screens/trainer.js', 'js/screens/check.js',
+  'js/screens/whole.js', 'js/screens/stats.js', 'js/screens/score.js',
   'js/screens/common.js', 'js/screens/parent.js', 'js/screens/add.js', 'js/screens/review.js', 'js/screens/settings.js',
   'vendor/pdf.min.mjs', 'vendor/pdf.worker.min.mjs',
   'fonts/playpen-sans.woff2', 'fonts/music-signs.woff2',

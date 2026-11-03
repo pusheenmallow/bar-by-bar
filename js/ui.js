@@ -31,6 +31,13 @@ let steppingBack = false;
 let goAfter = null;
 let pushAfter = false;
 
+// Swaps an element's contents, skipping anything left out by a condition.
+export function fill(el, ...kids) {
+  el.replaceChildren();
+  append(el, kids);
+  return el;
+}
+
 export const go = (path) => {
   if (steppingBack) goAfter = path; else location.hash = path;
 };
@@ -95,7 +102,7 @@ export function sheet(content, { onClose, dismiss = true, kind = '' } = {}) {
 export function replaceSheet(content) {
   if (!openSheet) return;
   const panel = openSheet.el.querySelector('.sheet');
-  panel.replaceChildren(...[content].flat());
+  fill(panel, content);
   panel.scrollTop = 0;
 }
 

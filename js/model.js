@@ -103,7 +103,7 @@ export const rowsToLayoutRows = (rows) => rows.map((r) => ({
 
 export const blankProgress = (pieceId, barId) => ({
   key: `${pieceId}|${barId}`, pieceId, barId, done: {}, flagged: false, notes: [], bestTempo: 0,
-  lastCheck: null, clean: 0, slips: 0, lastPractised: 0,
+  lastCheck: null, clean: 0, slips: 0, lastPractised: 0, runSlip: 0,
 });
 
 export const dayKey = (ts) => {
@@ -157,6 +157,44 @@ export function checkGroups(piece, progress, now = Date.now(), size = 4) {
   }
   flush();
   return groups;
+}
+
+/* ---------- practice time ---------- */
+
+export const practiceMode = (count) => (count <= 2 ? 'bar' : 'phrase');
+export const MODES = [
+  { id: 'bar', name: 'Short bars', colour: '#3F27B0', ink: '#FFFFFF' },
+  { id: 'phrase', name: 'Phrases', colour: '#7052E0', ink: '#FFFFFF' },
+  { id: 'piece', name: 'Whole piece', colour: '#AC92F5', ink: '#2F3237' },
+];
+export const goalSeconds = (piece) => (piece.dailyGoal ?? 10) * 60;
+
+// The longest a whole-piece play should take, with room for slow playing and a pause.
+export const runLimit = (piece, count) => Math.max(180, Math.round(((count * (piece.beats || 4) * 60) / (piece.tempo || 100)) * 2.5));
+
+export const clockText = (seconds) => {
+  const s = Math.max(0, Math.round(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
+export const timeText = (seconds) => {
+  const s = Math.round(seconds);
+  if (s < 60) return `${s} sec`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)} hr ${m % 60} min`;
+};
+
+export function numberRanges(numbers) {
+  const parts = [];
+  const list = [...numbers].sort((a, b) => a - b);
+  for (let i = 0; i < list.length; i++) {
+    let j = i;
+    while (j + 1 < list.length && list[j + 1] === list[j] + 1) j += 1;
+    parts.push(j > i + 1 ? `${list[i]} to ${list[j]}` : j === i + 1 ? `${list[i]}, ${list[j]}` : `${list[i]}`);
+    i = j;
+  }
+  return parts.join(', ');
 }
 
 /* ---------- tempo ---------- */

@@ -1,6 +1,6 @@
 import { h, go, icon } from '../ui.js';
-import { get, byIndex, progressMap } from '../store.js';
-import { PENS, playableBars, topStage, checkGroups } from '../model.js';
+import { get, byIndex, progressMap, secondsOn } from '../store.js';
+import { PENS, playableBars, topStage, checkGroups, dayKey, goalSeconds, timeText } from '../model.js';
 import { missing } from './common.js';
 
 function strip(piece, bars, progress) {
@@ -22,12 +22,15 @@ export async function player([id]) {
     const bars = playableBars(piece);
     const started = bars.filter((b) => topStage(piece, progress.get(b.id))).length;
     const checks = checkGroups(piece, progress).flat().length;
+    const today = await secondsOn(piece.id, dayKey(Date.now()));
+    const goal = goalSeconds(piece);
     rows.push(h('button', { class: 'piece-row', onClick: () => go(`/piece/${piece.id}`) },
       h('span', { class: 'piece-title' }, piece.title),
       strip(piece, bars, progress),
       h('span', { class: 'piece-sub' },
         checks ? `${checks} ${checks === 1 ? 'bar is' : 'bars are'} ready for a next-day check`
-          : `${started} of ${bars.length} bars started`)));
+          : `${started} of ${bars.length} bars started`),
+      h('span', { class: 'piece-sub' }, goal ? `${timeText(today)} of ${timeText(goal)} today` : `${timeText(today)} today`)));
   }
 
   return h('main', { class: 'screen player', vars: { pen: PENS[person.pen] } },

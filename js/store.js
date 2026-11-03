@@ -1,7 +1,7 @@
 // Everything the app remembers lives in IndexedDB on this device.
 
 const NAME = 'bar-by-bar';
-const VERSION = 1;
+const VERSION = 2;
 let opened;
 
 function open() {
@@ -10,14 +10,24 @@ function open() {
     const req = indexedDB.open(NAME, VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      db.createObjectStore('meta', { keyPath: 'key' });
-      db.createObjectStore('players', { keyPath: 'id' });
-      db.createObjectStore('pieces', { keyPath: 'id' }).createIndex('playerId', 'playerId');
-      db.createObjectStore('pages', { keyPath: 'id' }).createIndex('pieceId', 'pieceId');
-      db.createObjectStore('progress', { keyPath: 'key' }).createIndex('pieceId', 'pieceId');
-      db.createObjectStore('attempts', { keyPath: 'id', autoIncrement: true }).createIndex('pieceId', 'pieceId');
+      const make = (name, options, index) => {
+        if (db.objectStoreNames.contains(name)) return;
+        const store = db.createObjectStore(name, options);
+        if (index) store.createIndex(index, index);
+      };
+      make('meta', { keyPath: 'key' });
+      make('players', { keyPath: 'id' });
+      make('pieces', { keyPath: 'id' }, 'playerId');
+      make('pages', { keyPath: 'id' }, 'pieceId');
+      make('progress', { keyPath: 'key' }, 'pieceId');
+      make('attempts', { keyPath: 'id', autoIncrement: true }, 'pieceId');
+      make('time', { keyPath: 'key' }, 'pieceId');              // added in version 2
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   });
   return opened;
@@ -69,14 +79,45 @@ export async function progressMap(pieceId) {
 
 export async function deletePiece(pieceId) {
   const db = await open();
-  const tx = db.transaction(['pieces', 'pages', 'progress', 'attempts'], 'readwrite');
+  const tx = db.transaction(['pieces', 'pages', 'progress', 'attempts', 'time'], 'readwrite');
   tx.objectStore('pieces').delete(pieceId);
-  for (const [store, index] of [['pages', 'pieceId'], ['progress', 'pieceId'], ['attempts', 'pieceId']]) {
+  for (const [store, index] of [['pages', 'pieceId'], ['progress', 'pieceId'], ['attempts', 'pieceId'], ['time', 'pieceId']]) {
     const os = tx.objectStore(store);
     const keys = await done(os.index(index).getAllKeys(pieceId));
     keys.forEach((k) => os.delete(k));
   }
   await finished(tx);
+}
+
+/* ---------- practice time ---------- */
+
+// One record per piece per day. Each bar holds [single-bar, phrase, whole-piece] seconds,
+// so the bar times always add up to the day's total.
+const SLOT = { bar: 0, phrase: 1, piece: 2 };
+let timeQueue = Promise.resolve();
+
+export function addTime(pieceId, day, mode, barIds, seconds) {
+  timeQueue = timeQueue.then(async () => {
+    const key = `${pieceId}|${day}`;
+    const doc = (await get('time', key)) || { key, pieceId, day, modes: { bar: 0, phrase: 0, piece: 0 }, bars: {} };
+    doc.modes[mode] += seconds;
+    const share = seconds / barIds.length;
+    for (const id of barIds) {
+      const row = doc.bars[id] || [0, 0, 0];
+      row[SLOT[mode]] += share;
+      doc.bars[id] = row;
+    }
+    await put('time', doc);
+  }).catch((err) => console.error(err));
+  return timeQueue;
+}
+
+export const timeSaved = () => timeQueue;
+export const timeDocs = (pieceId) => byIndex('time', 'pieceId', pieceId);
+export const dayTotal = (doc) => (doc ? doc.modes.bar + doc.modes.phrase + doc.modes.piece : 0);
+export async function secondsOn(pieceId, day) {
+  await timeQueue;
+  return dayTotal(await get('time', `${pieceId}|${day}`));
 }
 
 /* ---------- backup ---------- */
@@ -100,6 +141,7 @@ export async function exportAll() {
     pieces: await all('pieces'),
     progress: await all('progress'),
     attempts: await all('attempts'),
+    time: await all('time'),
     pages: [],
   };
   for (const p of pages) {
@@ -117,7 +159,7 @@ export async function importAll(file) {
   for (const { data: url, ...rest } of data.pages) pages.push({ ...rest, blob: await fromDataUrl(url) });
 
   const db = await open();
-  const stores = ['meta', 'players', 'pieces', 'pages', 'progress', 'attempts'];
+  const stores = ['meta', 'players', 'pieces', 'pages', 'progress', 'attempts', 'time'];
   const tx = db.transaction(stores, 'readwrite');
   stores.forEach((s) => tx.objectStore(s).clear());
   data.meta.forEach((v) => tx.objectStore('meta').put(v));
@@ -126,5 +168,6 @@ export async function importAll(file) {
   pages.forEach((v) => tx.objectStore('pages').put(v));
   data.progress.forEach((v) => tx.objectStore('progress').put(v));
   data.attempts.forEach((v) => tx.objectStore('attempts').put(v));
+  (data.time || []).forEach((v) => tx.objectStore('time').put(v));     // older backups have none
   await finished(tx);
 }

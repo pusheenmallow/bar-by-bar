@@ -1,4 +1,4 @@
-import { h, go, icon, sheet, closeSheet, toast } from '../ui.js';
+import { h, go, fill, icon, sheet, closeSheet, toast } from '../ui.js';
 import { get, put } from '../store.js';
 import { listBars, newId, rowsToLayoutRows } from '../model.js';
 import { findBars } from '../detect-client.js';
@@ -233,7 +233,7 @@ export async function review([id], ctx) {
     stageEl.style.aspectRatio = `${pg.width} / ${pg.height}`;
     stageEl.replaceChildren(h('img', { src: await pageUrl(pg.pageId), alt: `Page ${pi + 1}` }), h('div', { class: 'review-boxes' }));
     drawOverlay();
-    tools.replaceChildren(
+    fill(tools,
       h('button', { class: 'btn', onClick: addRow }, 'Add a row'),
       hasOriginal && h('button', { class: 'btn', onClick: turn }, icon('rotate', 22), 'Turn the page'),
       hasOriginal && h('button', { class: 'btn', onClick: fixCorners }, 'Fix the corners'));

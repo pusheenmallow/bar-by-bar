@@ -4,6 +4,8 @@ import { player } from './screens/player.js';
 import { mapScreen } from './screens/map.js';
 import { trainer } from './screens/trainer.js';
 import { check } from './screens/check.js';
+import { whole } from './screens/whole.js';
+import { stats } from './screens/stats.js';
 import { parentHome } from './screens/parent.js';
 import { addPiece } from './screens/add.js';
 import { review } from './screens/review.js';
@@ -16,6 +18,8 @@ const routes = [
   [/^\/piece\/([^/]+)$/, mapScreen],
   [/^\/train\/([^/]+)\/([^/]+)\/([^/]+)$/, trainer],
   [/^\/check\/([^/]+)$/, check],
+  [/^\/whole\/([^/]+)$/, whole],
+  [/^\/stats\/([^/]+)$/, stats],
   [/^\/parent$/, parentHome],
   [/^\/parent\/add$/, addPiece],
   [/^\/parent\/review\/([^/]+)$/, review],

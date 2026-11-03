@@ -9,10 +9,12 @@ import { gate } from './parent.js';
 
 export function blankPiece(playerId) {
   return {
-    id: newId(), draft: true, playerId, title: '', tempo: 100, beats: 4, keySig: 'none', cleanTarget: 3, slowPercent: 65,
+    id: newId(), draft: true, playerId, title: '', tempo: 100, beats: 4, keySig: 'none', cleanTarget: 3, slowPercent: 65, dailyGoal: 10,
     firstBar: 1, stages: defaultStages(), layout: [], createdAt: Date.now(),
   };
 }
+
+export const goalText = (v) => (v ? `${v} min a day` : 'No goal');
 
 export const barCount = (pg) => pg.rows.reduce((n, r) => n + r.bars.length, 0);
 
@@ -121,6 +123,9 @@ export async function addPiece(_, ctx) {
         h('span', { class: 'field-label' }, 'Beats in a bar'),
         stepper({ label: 'Beats in a bar', value: piece.beats, min: 1, max: 12, onChange: (v) => { piece.beats = v; if (piece.layout.length) save(); } }))),
     field('Key signature', key, 'This adds a “forgot the flat or sharp” mistake to the trainer.'),
+    h('div', { class: 'field' },
+      h('span', { class: 'field-label' }, 'Practice goal'),
+      stepper({ label: 'Practice goal in minutes a day', value: piece.dailyGoal ?? 10, min: 0, max: 60, step: 5, format: goalText, onChange: (v) => { piece.dailyGoal = v; if (piece.layout.length) save(); } })),
     h('section', { class: 'block' },
       h('h2', {}, 'Pages'),
       h('p', { class: 'field-hint' }, 'Use one page per photo. Lay it flat in good light, with the whole page in view. PDF scans work too.'),

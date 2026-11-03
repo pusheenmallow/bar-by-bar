@@ -1,53 +1,60 @@
-import { h, go, icon, pen, sticker, sheet, closeSheet, seeded, strokePath } from '../ui.js';
-import { get, put, progressMap } from '../store.js';
+import { h, go, fill, icon, pen, sticker, sheet, closeSheet, seeded, strokePath } from '../ui.js';
+import { get, put, progressMap, timeDocs, dayTotal, timeSaved } from '../store.js';
 import {
   PENS, listBars, playableBars, blankProgress, nextStage, practiceStages, checkStage, waitingForCheck,
-  checkGroups, topStage, dayKey, barsLabel, newId,
+  checkGroups, topStage, dayKey, barsLabel, newId, goalSeconds, timeText, clockText, numberRanges,
 } from '../model.js';
-import { pageUrl, drawBars } from '../images.js';
+import { drawBars } from '../images.js';
 import { session } from '../session.js';
 import { missing, stepper } from './common.js';
+import { scorePages, layer, hitPlace } from './score.js';
 
-const MAX_CHUNK = 4;
+const MAX_CHUNK = 12;
+const TINTS = ['#EFE8FF', '#DCCBFF', '#C4A8FF', '#A985F5'];        // one hue, deeper means more time
 
 export async function mapScreen([id], ctx) {
   const piece = await get('pieces', id);
   if (!piece) return missing('That piece has gone.');
+  await timeSaved();
   let progress = await progressMap(id);
+  const docs = await timeDocs(id);
   const bars = listBars(piece);
+  const playable = playableBars(piece);
   const parent = session.parent;
   let painting = null;
+  let viewing = 'stages';
+  let tool = 'bar';
+  let firstPick = null;
 
-  const views = [];
-  const pagesEl = h('div', { class: 'pages' });
-  for (const [index, pg] of piece.layout.entries()) {
-    if (!pg.rows.length) continue;
-    const top = Math.max(0, pg.rows[0].top - 0.026);
-    const bottom = Math.min(1, pg.rows[pg.rows.length - 1].bottom + 0.003);
-    const span = bottom - top;
-    const canvas = h('canvas', { class: 'ink', 'aria-hidden': 'true' });
-    const hits = h('div', { class: 'hits' });
-    const box = h('div', { class: 'score', style: { aspectRatio: `${pg.width} / ${pg.height * span}` } },
-      h('img', { src: await pageUrl(pg.pageId), alt: `Page ${index + 1} of the music`, style: { top: `${(-top / span) * 100}%` } }),
-      canvas, hits);
-    pagesEl.append(box);
-    views.push({ box, canvas, hits, top, span, bars: bars.filter((b) => b.page === index) });
+  const barTime = new Map();
+  for (const doc of docs) {
+    for (const [barId, row] of Object.entries(doc.bars)) barTime.set(barId, (barTime.get(barId) || 0) + row[0] + row[1] + row[2]);
   }
+  const mostTime = Math.max(0, ...barTime.values());
+  const totalTime = docs.reduce((sum, d) => sum + dayTotal(d), 0);
+  const today = docs.find((d) => d.day === dayKey(Date.now()));
+  const todaySeconds = dayTotal(today);
+  const goal = goalSeconds(piece);
+
+  const { el: pagesEl, views } = await scorePages(piece, bars);
+
+  const timeBin = (seconds) => Math.min(TINTS.length - 1, Math.floor((seconds / mostTime) * TINTS.length));
 
   function draw(view) {
-    const { box, canvas, top, span } = view;
-    const w = box.clientWidth, height = box.clientHeight;
-    if (!w) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(w * dpr); canvas.height = Math.round(height * dpr);
-    const c = canvas.getContext('2d');
-    c.scale(dpr, dpr);
-    c.globalCompositeOperation = 'multiply';
-    const px = (b) => ({ x0: b.x0 * w, x1: b.x1 * w, y0: ((b.y0 - top) / span) * height, y1: ((b.y1 - top) / span) * height });
+    const pad = layer(view);
+    if (!pad) return;
+    const { c, px } = pad;
     for (const bar of view.bars) {
       const { x0, x1, y0, y1 } = px(bar);
       if (bar.skip) {
         c.fillStyle = '#D9DCE0';
+        c.fillRect(x0, y0, x1 - x0, y1 - y0);
+        continue;
+      }
+      if (viewing === 'time') {
+        const seconds = barTime.get(bar.id);
+        if (!seconds) continue;
+        c.fillStyle = TINTS[timeBin(seconds)];
         c.fillRect(x0, y0, x1 - x0, y1 - y0);
         continue;
       }
@@ -66,70 +73,120 @@ export async function mapScreen([id], ctx) {
   }
 
   function chips(view) {
-    const { top, span } = view;
+    const busiest = [...barTime.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k]) => k);
     view.hits.replaceChildren(...view.bars.map((bar) => {
       const prog = progress.get(bar.id);
       const reached = topStage(piece, prog);
       const waiting = waitingForCheck(piece, bar, prog);
       const checked = checkStage(piece) && prog?.done[checkStage(piece).id];
+      const seconds = barTime.get(bar.id) || 0;
+      const inStages = viewing === 'stages';
       const label = [
         `Bar ${bar.n}`,
         bar.skip ? 'skipped' : reached ? `reached ${reached.name}` : 'not started',
+        seconds ? `${timeText(seconds)} practised` : '',
         prog?.flagged ? 'tough bar' : '',
+        prog?.runSlip ? 'slipped in the last whole-piece play' : '',
         prog?.notes.length ? 'has a note' : '',
         waiting ? 'ready for a next-day check' : '',
       ].filter(Boolean).join(', ');
       return h('button', {
-        class: `bar-hit ${bar.skip ? 'skipped' : ''} ${waiting ? 'waiting' : ''}`,
+        class: `bar-hit ${bar.skip ? 'skipped' : ''} ${waiting && inStages ? 'waiting' : ''} ${firstPick?.id === bar.id ? 'picked' : ''}`,
         'aria-label': label,
         disabled: bar.skip && !parent,
-        style: {
-          left: `${bar.x0 * 100}%`, width: `${(bar.x1 - bar.x0) * 100}%`,
-          top: `${((bar.y0 - top) / span) * 100}%`, height: `${((bar.y1 - bar.y0) / span) * 100}%`,
-        },
+        style: hitPlace(bar, view),
         onClick: () => onBar(bar),
       },
       h('span', { class: 'num' }, bar.n),
-      h('span', { class: 'marks' },
+      !inStages && busiest.includes(bar.id) && seconds ? h('span', { class: 'bar-time' }, clockText(seconds)) : null,
+      inStages && h('span', { class: 'marks' },
+        prog?.runSlip ? h('span', { class: 'mark slipped', title: 'Slipped in the whole piece' }, '!') : null,
         prog?.flagged && h('span', { class: 'mark flag' }, icon('flag', 18)),
         prog?.notes.length ? h('span', { class: 'mark note' }, icon('note', 18)) : null,
         checked && h('span', { class: 'mark star' }, sticker(26))));
     }));
   }
 
-  const counts = () => piece.stages.map((s) => playableBars(piece).filter((b) => progress.get(b.id)?.done[s.id]).length);
+  const counts = () => piece.stages.map((s) => playable.filter((b) => progress.get(b.id)?.done[s.id]).length);
 
   const trayEl = h('footer', { class: 'tray' });
   function tray() {
+    if (viewing === 'time') {
+      trayEl.replaceChildren(h('div', { class: 'time-key' },
+        h('span', { class: 'tray-name' }, `Total ${timeText(totalTime)}`),
+        h('span', { class: 'tray-count' }, 'Less'),
+        TINTS.map((t) => h('i', { style: { background: t } })),
+        h('span', { class: 'tray-count' }, 'More'),
+        h('span', { class: 'tray-count key-note' }, 'Phrase and whole-piece time is shared evenly across the bars played.')));
+      return;
+    }
     const c = counts();
-    const total = playableBars(piece).length;
     trayEl.replaceChildren(...piece.stages.map((s, i) => h(parent ? 'button' : 'div', {
       class: `tray-pen ${painting === s.id ? 'active' : ''}`,
       'aria-pressed': parent ? String(painting === s.id) : null,
       onClick: parent ? () => { painting = painting === s.id ? null : s.id; tray(); hint(); } : null,
-    }, pen(PENS[s.pen], 30), h('span', { class: 'tray-name' }, s.name), h('span', { class: 'tray-count' }, `${c[i]} of ${total}`))));
+    }, pen(PENS[s.pen], 30), h('span', { class: 'tray-name' }, s.name), h('span', { class: 'tray-count' }, `${c[i]} of ${playable.length}`))));
+  }
+
+  /* ---------- how to practise ---------- */
+  const modeEl = h('div', { class: 'mode-row', role: 'group', 'aria-label': 'How to practise' });
+  function modes() {
+    const seg = (label, active, onClick) => h('button', { class: `seg ${active ? 'on' : ''}`, 'aria-pressed': String(active), onClick }, label);
+    modeEl.replaceChildren(
+      seg('One bar', tool === 'bar', () => { tool = 'bar'; firstPick = null; refresh(); }),
+      seg('Phrase', tool === 'phrase', () => { tool = 'phrase'; firstPick = null; viewing = 'stages'; refresh(); }),
+      h('button', { class: 'seg', onClick: () => go(`/whole/${id}`) }, 'Whole piece'),
+      h('span', { class: 'seg-gap' }),
+      seg('Time map', viewing === 'time', () => { viewing = viewing === 'time' ? 'stages' : 'time'; refresh(); }),
+      h('button', { class: 'seg', onClick: () => go(`/stats/${id}`) }, 'Stats'));
+  }
+
+  const clockEl = h('div', { class: 'clock wide' });
+  function clockLine() {
+    const reached = goal && todaySeconds >= goal;
+    clockEl.classList.toggle('reached', !!reached);
+    clockEl.classList.toggle('no-goal', !goal);
+    fill(clockEl,
+      goal ? h('span', { class: 'clock-track', 'aria-hidden': 'true' }, h('i', { class: 'clock-fill', style: { width: `${Math.min(100, (todaySeconds / goal) * 100)}%` } })) : null,
+      h('span', { class: 'clock-text' }, goal
+        ? `${timeText(todaySeconds)} of ${timeText(goal)} today`
+        : `${timeText(todaySeconds)} today`));
   }
 
   const bannerEl = h('div', { class: 'banner-slot' });
   function banner() {
-    const groups = checkGroups(piece, progress);
-    const count = groups.flat().length;
-    bannerEl.replaceChildren(...(count ? [h('div', { class: 'banner' },
-      sticker(46),
-      h('p', {}, `${count} ${count === 1 ? 'bar is' : 'bars are'} ready for a next-day check.`),
-      h('button', { class: 'btn primary', onClick: () => go(`/check/${id}`) }, 'Start check'))] : []));
+    const count = checkGroups(piece, progress).flat().length;
+    const slipped = playable.filter((b) => progress.get(b.id)?.runSlip);
+    const nudge = goal && todaySeconds >= goal * 0.7 && !(today?.modes.piece > 0) && playable.length > 2;
+    let content = [];
+    if (count) {
+      content = [sticker(46), h('p', {}, `${count} ${count === 1 ? 'bar is' : 'bars are'} ready for a next-day check.`),
+        h('button', { class: 'btn primary', onClick: () => go(`/check/${id}`) }, 'Start check')];
+    } else if (slipped.length) {
+      content = [h('span', { class: 'mark slipped big' }, '!'),
+        h('p', {}, `${slipped.length === 1 ? 'Bar' : 'Bars'} ${numberRanges(slipped.map((b) => b.n))} slipped in the whole piece.`),
+        h('button', { class: 'btn primary', onClick: () => openBar(slipped[0]) }, `Fix bar ${slipped[0].n}`)];
+    } else if (nudge) {
+      content = [sticker(46), h('p', {}, 'Nearly at today’s goal. Finish with the whole piece?'),
+        h('button', { class: 'btn primary', onClick: () => go(`/whole/${id}`) }, 'Whole piece')];
+    }
+    bannerEl.replaceChildren(...(content.length ? [h('div', { class: 'banner' }, content)] : []));
   }
 
   const hintEl = h('p', { class: 'paint-hint' });
   function hint() {
-    if (!parent) return;
-    const s = piece.stages.find((x) => x.id === painting);
-    hintEl.textContent = s ? `Tap bars to mark or clear “${s.name}”. Tap the pen again to stop.` : 'Tap a bar to add a teacher note. Tap a pen, then tap bars, to mark what is already learned.';
+    if (parent) {
+      const s = piece.stages.find((x) => x.id === painting);
+      hintEl.textContent = s ? `Tap bars to mark or clear “${s.name}”. Tap the pen again to stop.` : 'Tap a bar to add a teacher note. Tap a pen, then tap bars, to mark what is already learned.';
+      return;
+    }
+    if (tool === 'phrase') hintEl.textContent = firstPick ? `Bar ${firstPick.n} is the start. Now tap the last bar.` : 'Tap the first bar of the phrase.';
+    else hintEl.textContent = viewing === 'time' ? 'Deeper colour means more time on that bar.' : '';
   }
 
   function refresh() {
     views.forEach((v) => { draw(v); chips(v); });
-    tray(); banner();
+    tray(); banner(); modes(); hint(); clockLine();
   }
 
   async function saveProg(prog) {
@@ -146,13 +203,21 @@ export async function mapScreen([id], ctx) {
       refresh();
       return;
     }
+    if (tool === 'phrase') {
+      if (!firstPick) { firstPick = bar; refresh(); return; }
+      let a = playable.findIndex((b) => b.id === firstPick.id), b = playable.findIndex((x) => x.id === bar.id);
+      if (a > b) [a, b] = [b, a];
+      firstPick = null; tool = 'bar';
+      refresh();
+      openBar(playable[a], Math.min(MAX_CHUNK, b - a + 1));
+      return;
+    }
     openBar(bar);
   }
 
-  function openBar(bar) {
-    let count = 1;
+  function openBar(bar, startCount = 1) {
+    let count = startCount;
     let chosen = null;
-    const playable = playableBars(piece);
     const startAt = playable.findIndex((b) => b.id === bar.id);
     const prog = () => progress.get(bar.id) || blankProgress(id, bar.id);
     const chunk = () => (startAt < 0 ? [bar] : playable.slice(startAt, startAt + count));
@@ -164,10 +229,11 @@ export async function mapScreen([id], ctx) {
 
     const cropBox = h('div', { class: 'crop' }, h('canvas', {}));
     const body = h('div', { class: 'bar-body' });
+    const heading = h('h2', {}, barsLabel(chunk()));
 
     async function paintCrop() {
       const width = cropBox.clientWidth || 560;
-      await drawBars(cropBox.firstChild, chunk(), { width, height: 220 });
+      await drawBars(cropBox.firstChild, chunk(), { width, height: count > 4 ? 300 : 220 });
     }
 
     function stageRow(s) {
@@ -175,8 +241,8 @@ export async function mapScreen([id], ctx) {
       const isCheck = s.pace === 'nextday';
       const isDone = chunk().every((b) => progress.get(b.id)?.done[s.id]);
       const waiting = isCheck && waitingForCheck(piece, bar, progress.get(bar.id));
-      const today = isCheck && p.lastCheck === dayKey(Date.now());
-      const status = isDone ? 'Done' : isCheck ? (waiting ? 'Ready now' : today ? 'Try again tomorrow' : 'After full speed') : '';
+      const today2 = isCheck && p.lastCheck === dayKey(Date.now());
+      const status = isDone ? 'Done' : isCheck ? (waiting ? 'Ready now' : today2 ? 'Try again tomorrow' : 'After full speed') : '';
       const select = isCheck ? null : () => { chosen = s.id; renderBody(); };
       return h(select ? 'button' : 'div', {
         class: `stage-row ${chosen === s.id ? 'chosen' : ''}`,
@@ -233,9 +299,12 @@ export async function mapScreen([id], ctx) {
     function renderBody() {
       const p = prog();
       const list = chunk();
+      heading.textContent = barsLabel(list);
       if (!chosen) chosen = (nextStage(piece, p) || practiceStages(piece).at(-1))?.id;
       const stage = piece.stages.find((s) => s.id === chosen);
-      body.replaceChildren(
+      const seconds = barTime.get(bar.id) || 0;
+      const tries = p.clean + p.slips;
+      fill(body,
         h('div', { class: 'chunk-line' },
           h('span', {}, 'Practise'),
           stepper({
@@ -252,6 +321,8 @@ export async function mapScreen([id], ctx) {
             go(`/train/${id}/${ids}/${chosen}`);
           },
         }, `Practise ${barsLabel(list).toLowerCase()}`),
+        count === 1 && (seconds || tries) ? h('p', { class: 'bar-facts' },
+          `${timeText(seconds)} on bar ${bar.n}. ${tries ? `${p.clean} of ${tries} tries clean.` : ''}`) : null,
         h('label', { class: 'toggle' },
           h('input', {
             type: 'checkbox', checked: !!p.flagged,
@@ -268,7 +339,7 @@ export async function mapScreen([id], ctx) {
 
     sheet([
       h('header', { class: 'sheet-head' },
-        h('h2', {}, `Bar ${bar.n}`),
+        heading,
         h('button', { class: 'round', 'aria-label': 'Close', onClick: () => closeSheet() }, icon('close'))),
       cropBox, body,
     ], { kind: 'bar-sheet' });
@@ -277,7 +348,7 @@ export async function mapScreen([id], ctx) {
   }
 
   const ro = new ResizeObserver(() => views.forEach(draw));
-  ctx.onShow(() => { views.forEach((v) => ro.observe(v.box)); refresh(); hint(); });
+  ctx.onShow(() => { views.forEach((v) => ro.observe(v.box)); refresh(); });
   ctx.onLeave(() => ro.disconnect());
 
   return h('main', { class: 'screen map' },
@@ -287,6 +358,8 @@ export async function mapScreen([id], ctx) {
         onClick: () => go(parent ? `/parent/piece/${id}` : `/player/${piece.playerId}`),
       }, icon('back')),
       h('h1', {}, piece.title)),
-    parent && hintEl,
+    clockEl,
+    !parent && modeEl,
+    hintEl,
     bannerEl, pagesEl, trayEl);
 }

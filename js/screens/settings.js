@@ -4,6 +4,7 @@ import { KEYS, PENS, listBars, mistakeList, newId, nextPen } from '../model.js';
 import { session } from '../session.js';
 import { field, stepper, missing } from './common.js';
 import { gate } from './parent.js';
+import { goalText } from './add.js';
 
 function patterns(piece, attempts) {
   const bars = listBars(piece);
@@ -93,6 +94,7 @@ export async function settings([id], ctx) {
 
     h('div', { class: 'row-buttons left' },
       h('button', { class: 'btn primary', onClick: () => go(`/piece/${id}`) }, 'Add notes and mark bars'),
+      h('button', { class: 'btn', onClick: () => go(`/stats/${id}`) }, 'Stats'),
       h('button', { class: 'btn', onClick: () => go(`/parent/review/${id}`) }, 'Check the boxes')),
 
     h('section', { class: 'block' },
@@ -109,6 +111,8 @@ export async function settings([id], ctx) {
           stepper({ label: 'Full speed in beats a minute', value: piece.tempo, min: 30, max: 240, step: 2, format: (v) => `♩ = ${v}`, onChange: (v) => { piece.tempo = v; save(); } })),
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Beats in a bar'),
           stepper({ label: 'Beats in a bar', value: piece.beats, min: 1, max: 12, onChange: (v) => { piece.beats = v; save(); } }))),
+      h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Practice goal'),
+        stepper({ label: 'Practice goal in minutes a day', value: piece.dailyGoal ?? 10, min: 0, max: 60, step: 5, format: goalText, onChange: (v) => { piece.dailyGoal = v; save(); } })),
       h('div', { class: 'two' },
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Clean in a row'),
           stepper({ label: 'Clean in a row', value: piece.cleanTarget, min: 2, max: 7, onChange: (v) => { piece.cleanTarget = v; save(); } })),

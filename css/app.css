@@ -264,6 +264,19 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 .time-key .tray-name { font-size: .92rem; margin-right: 12px; }
 .key-note { flex-basis: 100%; }
 
+/* ---------- gentle changes ---------- */
+::view-transition { pointer-events: none; }        /* a quick tap still lands during a fade */
+::view-transition-group(root), ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; animation-timing-function: ease-out; }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(16px); } }
+@keyframes slide-in { from { opacity: 0; transform: translateX(20px); } }
+.scrim { animation: fade-in .16s ease-out; }
+.scrim.staying { animation: none; }
+.sheet { animation: rise-in .2s ease-out; }
+.scrim.leaving { pointer-events: none; animation: fade-out .15s ease-in forwards; }
+.toast { animation: fade-in .16s ease-out; }
+
 /* ---------- sheets ---------- */
 .scrim {
   position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; justify-content: center;
@@ -441,7 +454,7 @@ textarea, input[type='text'], input[type='number'], select {
   .slots.long { --slot: 41px; }
   .answer { min-height: 80px; }
   .scrim { justify-content: flex-end; align-items: stretch; }
-  .sheet.bar-sheet { width: 500px; max-height: none; height: 100%; border-radius: var(--r-lg) 0 0 var(--r-lg); }
+  .sheet.bar-sheet { animation-name: slide-in; width: 500px; max-height: none; height: 100%; border-radius: var(--r-lg) 0 0 var(--r-lg); }
   .sheet:not(.bar-sheet) { margin: auto; max-height: 92dvh; border-radius: var(--r-lg); }
 }
 

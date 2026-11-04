@@ -78,6 +78,25 @@ export const goUp = (path) => whenReady(() => {
   if (at >= 0 && place > 0) history.go(at - place); else swap(path);
 });
 
+/* ---------- gentle changes ---------- */
+
+const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Crossfades to a new screen. The old look stays up until the new one is ready.
+// Older browsers just fade the new screen in.
+export function softly(change, fadeIn) {
+  if (still() || document.hidden) { change(); return Promise.resolve(); }
+  if (!document.startViewTransition) {
+    change();
+    fadeIn?.()?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
+    return Promise.resolve();
+  }
+  const moving = document.startViewTransition(change);
+  moving.ready.catch(() => {});       // skipped when another screen follows straight after
+  moving.finished.catch(() => {});
+  return moving.updateCallbackDone;
+}
+
 /* ---------- overlays ---------- */
 
 const layer = () => document.getElementById('layer');
@@ -87,7 +106,12 @@ export function closeSheet(fromHistory = false) {
   if (!openSheet) return;
   const { el, onClose } = openSheet;
   openSheet = null;
-  el.remove();
+  if (still()) el.remove();
+  else {
+    el.classList.add('leaving');
+    el.inert = true;
+    setTimeout(() => el.remove(), 150);
+  }
   onClose?.();
   if (!fromHistory && history.state?.sheet) {
     steppingBack = true;
@@ -122,7 +146,7 @@ export function sheet(content, { onClose, dismiss = true, kind = '' } = {}) {
   }
   const panel = h('section', { class: `sheet ${kind}`, role: 'dialog', 'aria-modal': 'true' }, content);
   const el = h('div', {
-    class: 'scrim',
+    class: `scrim ${already ? 'staying' : ''}`,
     onClick: (e) => { if (dismiss && e.target === el) closeSheet(); },
   }, panel);
   layer().append(el);
@@ -140,6 +164,7 @@ export function replaceSheet(content) {
   const panel = openSheet.el.querySelector('.sheet');
   fill(panel, content);
   panel.scrollTop = 0;
+  if (!still()) panel.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 160, easing: 'ease-out' });
 }
 
 let toastTimer;

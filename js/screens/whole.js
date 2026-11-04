@@ -1,4 +1,4 @@
-import { h, goUp, icon, sticker, sheet, toast } from '../ui.js';
+import { h, goUp, icon, sticker, sheet, toast, softly } from '../ui.js';
 import { get, put, progressMap } from '../store.js';
 import {
   listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges,
@@ -162,8 +162,7 @@ export async function whole([id], ctx) {
 
   function summary(list, took) {
     if (!list.length) fanfare();
-    root.className = 'screen finish';
-    root.replaceChildren(h('div', { class: 'finish-body' },
+    softly(() => { root.className = 'screen finish'; root.replaceChildren(h('div', { class: 'finish-body' },
       !list.length && h('div', { class: 'cheer' }, sticker(76)),
       h('h1', { class: 'center' }, list.length ? `${list.length} ${list.length === 1 ? 'bar' : 'bars'} to look at` : 'Clean all the way!'),
       h('p', { class: 'center lead' }, list.length
@@ -172,7 +171,7 @@ export async function whole([id], ctx) {
       list.length ? h('div', { class: 'row-buttons narrow' }, list.slice(0, 4).map(practiseLink)) : null,
       h('div', { class: 'row-buttons narrow' },
         h('button', { class: 'btn', onClick: () => ctx.rerender() }, 'Play it again'),
-        h('button', { class: 'btn primary', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece'))));
+        h('button', { class: 'btn primary', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece')))); }, () => root);
   }
 
   const ro = new ResizeObserver(() => views.forEach(draw));

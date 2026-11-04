@@ -1,4 +1,4 @@
-import { h, closeSheet, noteRoute } from './ui.js';
+import { h, closeSheet, noteRoute, softly } from './ui.js';
 import './theme.js';
 import { home } from './screens/home.js';
 import { player } from './screens/player.js';
@@ -34,6 +34,7 @@ let leaving = [];
 let renderId = 0;
 let lastPath = null;
 let inGrownUps = false;
+let onScreen = null;
 
 // Grown-ups is a separate space: it is open only while on its own screens.
 function enter(path) {
@@ -65,9 +66,16 @@ async function render() {
       ? await match[1](match[0].slice(1).map((part) => part && decodeURIComponent(part)), ctx)
       : await home([], ctx);
     if (mine !== renderId) return;
-    app.replaceChildren(el);
-    window.scrollTo(0, 0);
-    showing.forEach((fn) => fn());
+    const view = `${path}|${!!session.parent}`;     // redrawing a screen in place stays instant
+    const swap = () => {
+      if (mine !== renderId) return;
+      app.replaceChildren(el);
+      window.scrollTo(0, 0);
+      showing.forEach((fn) => fn());
+    };
+    const moved = onScreen !== null && view !== onScreen;
+    onScreen = view;
+    if (moved) await softly(swap, () => el); else swap();
   } catch (err) {
     console.error(err);
     app.replaceChildren(h('main', { class: 'screen' },

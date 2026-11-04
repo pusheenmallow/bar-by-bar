@@ -1,4 +1,4 @@
-import { h, goUp, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
+import { h, goUp, softly, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
 import { get, put, progressMap } from '../store.js';
 import { checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress } from '../model.js';
 import { drawBars } from '../images.js';
@@ -93,8 +93,7 @@ export async function check([id], ctx) {
   function finish() {
     fanfare();
     const backStage = piece.stages[piece.stages.findIndex((s) => s.id === stage.id) - 1]?.id || stage.id;
-    root.className = 'screen finish';
-    root.replaceChildren(h('div', { class: 'finish-body' },
+    softly(() => { root.className = 'screen finish'; root.replaceChildren(h('div', { class: 'finish-body' },
       h('div', { class: 'cheer' }, sticker(76)),
       h('h1', { class: 'center' }, passed === 1 ? '1 bar stuck' : `${passed} bars stuck`),
       again.length ? h('p', { class: 'center lead' }, `${again.length === 1 ? `Bar ${again[0].n} needs` : `Bars ${again.map((b) => b.n).join(', ')} need`} a bit more. Try again tomorrow.`) : null,
@@ -103,7 +102,7 @@ export async function check([id], ctx) {
           class: 'btn',
           onClick: () => sheet(practicePicker({ piece, bars: [again[0]], progress, stageId: backStage }), { kind: 'bar-sheet' }),
         }, `Practise bar ${again[0].n}`) : null,
-        h('button', { class: 'btn primary', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece'))));
+        h('button', { class: 'btn primary', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece')))); }, () => root);
   }
 
   const ro = new ResizeObserver(() => paint());

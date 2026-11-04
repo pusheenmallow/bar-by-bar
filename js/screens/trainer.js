@@ -1,7 +1,7 @@
-import { h, goUp, swapTo, icon, sheet, closeSheet, replaceSheet, sticker, crown, crownSticker, toast } from '../ui.js';
-import { get, put, progressMap } from '../store.js';
+import { h, fill, goUp, swapTo, icon, sheet, closeSheet, sticker, crown, crownSticker, toast } from '../ui.js';
+import { get, put, progressMap, byIndex } from '../store.js';
 import {
-  penVar, listBars, barsLabel, blankProgress, mistakeList, nextForBars, startTempo, clampTempo, easierTempo, fasterTempo,
+  penVar, listBars, barsLabel, blankProgress, mistakeList, rankMistakes, nextForBars, startTempo, clampTempo, easierTempo, fasterTempo,
   freshRun, afterClean, afterSlip, stageNeedsSpeed, goodRun, MASTERY_RUN, allCrowned,
 } from '../model.js';
 import { drawBars } from '../images.js';
@@ -21,6 +21,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   const stage = piece.stages.find((s) => s.id === stageId);
   if (!bars.length || !stage) return missing('That practice has gone.');
   const progress = await progressMap(id);
+  const tried = await byIndex('attempts', 'pieceId', id);
   const good = goodRun(piece);
   const chosenGoal = Number(runGoal) >= MASTERY_RUN ? MASTERY_RUN : good;
   let target = chosenGoal;
@@ -33,6 +34,10 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   const met = new Metronome();
   met.bpm = tempo;
   met.beats = piece.beats || 4;
+
+  const coach = h('div', { class: 'coach', 'aria-live': 'polite' });
+  const showHint = () => fill(coach, h('p', { class: 'goal' }, stage.hint, stage.dynamics ? ' Dynamics count.' : ''));
+  showHint();
 
   /* ---------- the music ---------- */
   const crop = h('canvas', {});
@@ -137,6 +142,8 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
       return;
     }
     clock.touch();
+    saveSlip();
+    showHint();
     if (stage.pace === 'target' && run.tokens && tempo > run.speed) {   // slower stickers don't carry up
       run = freshRun();
       toast('Faster now, so the count starts again.');
@@ -282,63 +289,65 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   }
 
   /* ---------- slip ---------- */
+  // A slip counts on the first tap. The reason and the tip appear on the screen, so nothing
+  // covers the music, and the tip stays up during the next try with nothing to dismiss.
+  const reasons = rankMistakes(mistakeList(piece, stage), tried, bars.map((b) => b.id));
+  let unsaved = false;
+  let lastReason = null;
+
+  function saveSlip(tag = null) {
+    if (!unsaved) return;
+    unsaved = false;
+    record('slip', tag);
+  }
+
   function slip() {
     if (ending) return;
     clock.touch();
+    saveSlip();
     run = afterSlip(run);
     showTokens('slip');
     peelOff();
-    let saved = false;
-    const save = (tag) => { if (!saved) { saved = true; record('slip', tag); } };
-    const list = mistakeList(piece, stage);
+    unsaved = true;
+    fill(coach, h('div', { class: 'chips' },
+      h('span', { class: 'coach-ask' }, 'What happened?'),
+      reasons.map((m) => h('button', {
+        class: `chip ${m.id === lastReason ? 'last' : ''}`,
+        onClick: () => {
+          clock.touch();
+          lastReason = m.id;
+          saveSlip(m.id);
+          showTip(m);
+        },
+      }, m.label))));
+  }
 
-    const easier = () => {
-      const options = [];
-      if (met.running) {
-        const slower = easierTempo(tempo);
-        options.push(h('button', {
-          class: 'btn primary',
-          onClick: () => { setTempo(slower); run.slipsInRow = 0; closeSheet(); },
-        }, `Slow down to ${slower}`));
-      }
-      if (bars.length > 1) {
-        const half = Math.ceil(bars.length / 2);
-        const parts = [bars.slice(0, half), bars.slice(half)];
-        parts.forEach((part) => options.push(h('button', {
-          class: `btn ${options.length ? '' : 'primary'}`,
-          onClick: () => {
-            closeSheet();
-            bars = part;
-            clock.setBars(part);
-            title.textContent = barsLabel(bars);
-            run.slipsInRow = 0;
-            paint();
-          },
-        }, `Just ${barsLabel(part).toLowerCase()}`)));
-      }
-      replaceSheet([
-        h('h2', {}, 'Two slips in a row'),
-        h('p', {}, options.length ? 'Make it easier so the next try is clean.' : 'Make it easier: play it slower, and only the beats around the slip.'),
-        h('div', { class: 'stack-buttons' }, options,
-          h('button', { class: 'btn', onClick: () => { run.slipsInRow = 0; closeSheet(); } }, options.length ? 'Keep going' : 'Got it')),
-      ]);
-    };
+  function showTip(m) {
+    const twice = run.slipsInRow >= 2;
+    if (twice) run.slipsInRow = 0;
+    fill(coach, h('p', { class: 'fix' }, m.fix), twice ? easier() : null);
+  }
 
-    const afterFix = () => { if (run.slipsInRow >= 2) easier(); else closeSheet(); };
-
-    const showFix = (m) => {
-      save(m.id);
-      replaceSheet([
-        h('h2', {}, 'Try this'),
-        h('p', { class: 'fix' }, m.fix),
-        h('button', { class: 'btn primary big wide', onClick: afterFix }, 'Got it'),
-      ]);
-    };
-
-    sheet([
-      h('h2', {}, 'What happened?'),
-      h('div', { class: 'chips' }, list.map((m) => h('button', { class: 'chip', onClick: () => showFix(m) }, m.label))),
-    ], { onClose: () => save(null) });
+  function easier() {
+    const box = h('div', { class: 'coach-easier' });
+    const option = (label, act) => h('button', { class: 'btn', onClick: () => { act(); box.remove(); } }, label);
+    const options = [];
+    if (met.running) {
+      const slower = easierTempo(tempo);
+      options.push(option(`Slow down to ${slower}`, () => setTempo(slower)));
+    }
+    if (bars.length > 1) {
+      const half = Math.ceil(bars.length / 2);
+      [bars.slice(0, half), bars.slice(half)].forEach((part) => options.push(option(`Just ${barsLabel(part).toLowerCase()}`, () => {
+        bars = part;
+        clock.setBars(part);
+        title.textContent = barsLabel(bars);
+        paint();
+      })));
+    }
+    return fill(box,
+      h('span', {}, options.length ? 'Two slips in a row. Make it easier:' : 'Two slips in a row. Go slower, just the beats around the slip.'),
+      options);
   }
 
   /* ---------- leaving ---------- */
@@ -354,6 +363,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     clock.start();
   });
   ctx.onLeave(() => {
+    saveSlip();
     ro.disconnect();
     clock.stop();
     met.dispose();
@@ -370,7 +380,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
       h('span', { class: 'stage-tag' }, h('i', {}), stage.name)),
     cropBox,
     h('section', { class: 'train-side' },
-      h('p', { class: 'goal' }, stage.hint, stage.dynamics ? ' Dynamics count.' : ''),
+      coach,
       h('div', { class: 'met' },
         dots,
         h('div', { class: 'tempo' },

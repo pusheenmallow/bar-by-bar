@@ -361,6 +361,14 @@ textarea, input[type='text'], input[type='number'], select {
 .swipe-fx { position: absolute; mix-blend-mode: multiply; pointer-events: none; }
 .train-side { display: flex; flex-direction: column; gap: 12px; }
 .goal { font-size: 1rem; text-align: center; }
+.coach { height: 118px; display: flex; flex-direction: column; justify-content: center; gap: 8px; overflow-y: auto; text-align: center; }
+.coach .chips { justify-content: center; align-items: center; gap: 6px; }
+.coach .chip { min-height: 42px; padding: 6px 12px; font-size: .92rem; }
+.coach .chip.last { border-color: var(--brass); }
+.coach-ask { padding-right: 6px; font-weight: 500; }
+.coach .fix { font-size: 1rem; line-height: 1.4; }
+.coach-easier { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; font-size: .9rem; color: var(--ink-2); }
+.coach-easier .btn { min-height: 42px; padding: 4px 12px; color: var(--ink); }
 .met { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 18px; }
 .beats { display: flex; align-items: center; gap: 8px; }
 .beats i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
@@ -429,6 +437,7 @@ textarea, input[type='text'], input[type='number'], select {
   }
   .train-top { grid-column: 1 / -1; }
   .train-side { justify-content: space-between; min-height: 0; overflow-y: auto; }
+  .coach { flex: 1 1 auto; height: auto; min-height: 0; justify-content: flex-start; }
   .slots.long { --slot: 41px; }
   .answer { min-height: 80px; }
   .scrim { justify-content: flex-end; align-items: stretch; }
@@ -562,6 +571,20 @@ textarea, input[type='text'], input[type='number'], select {
   .pick-label { margin-top: 0; }
   .goal-option { min-height: 54px; }
   .btn.big { min-height: 52px; }
+}
+
+@media (orientation: landscape) and (min-width: 900px) and (max-height: 700px) {
+  .run-label { display: none; }
+  .train-side { gap: 8px; }
+  .speed-range { height: 30px; }
+  .speed-stop { min-height: 36px; padding-top: 2px; padding-bottom: 2px; }
+  .coach .chips { gap: 4px; }
+  .coach .chip { min-height: 36px; padding: 4px 9px; font-size: .84rem; }
+  .coach-ask { width: 100%; padding: 0; }
+}
+
+@media (max-width: 720px) and (orientation: portrait) {
+  .coach { height: 142px; }
 }
 
 @media (max-width: 560px) {

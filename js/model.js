@@ -59,6 +59,18 @@ export function mistakeList(piece, stage) {
   return list;
 }
 
+// The player's usual mistakes first, counting this bar's most. The order stays put during a practice.
+export function rankMistakes(list, attempts, barIds) {
+  const here = new Set(barIds);
+  const score = new Map();
+  for (const a of attempts) {
+    if (!a.tag) continue;
+    score.set(a.tag, (score.get(a.tag) || 0) + (a.barIds.some((id) => here.has(id)) ? 3 : 1));
+  }
+  const rank = (m) => (m.id === 'unsure' ? -1 : score.get(m.id) || 0);
+  return list.slice().sort((a, b) => rank(b) - rank(a));
+}
+
 /* ---------- bars ---------- */
 
 export function listBars(piece) {

@@ -1,6 +1,6 @@
 import { h, go, icon, sheet, closeSheet, toast, confirmSheet } from '../ui.js';
-import { all, put, del, byIndex, getMeta, setMeta, exportAll, importAll, progressMap } from '../store.js';
-import { penVar, PLAYER_PENS, newId, playableBars, topStage } from '../model.js';
+import { all, put, del, byIndex, getMeta, setMeta, exportAll, importAll, progressMap, groupOf, learnersOf, removeLearner, deletePiece } from '../store.js';
+import { penVar, PLAYER_PENS, newId, playableBars, topStage, nameList } from '../model.js';
 import { themeChoice, setTheme } from '../theme.js';
 import { session } from '../session.js';
 import { isMuted, setMuted } from '../sound.js';
@@ -104,9 +104,23 @@ function playerSheet(existing, done) {
       existing && h('button', {
         class: 'btn danger',
         onClick: async () => {
-          if ((await byIndex('pieces', 'playerId', existing.id)).length) {
-            toast('Delete or move their pieces first.');
-            return;
+          const theirs = (await byIndex('pieces', 'playerId', existing.id)).filter((p) => !p.draft);
+          if (theirs.length) {
+            const alone = [];
+            for (const p of theirs) if ((await learnersOf(p)).length === 1) alone.push(p);
+            const shared = theirs.filter((p) => !alone.includes(p));
+            const quote = (list) => nameList(list.map((p) => `“${p.title}”`));
+            const body = [
+              shared.length && `Their progress on ${quote(shared)} will be deleted. Everyone else keeps theirs.`,
+              alone.length && `${quote(alone)} will be deleted${shared.length ? ' too' : ''}, since nobody else is learning ${alone.length === 1 ? 'it' : 'them'}.`,
+            ].filter(Boolean).join(' ');
+            const yes = await confirmSheet({ title: `Remove ${existing.name}?`, body, yes: `Remove ${existing.name}`, danger: true });
+            if (!yes) return;
+            for (const p of theirs) {
+              if (alone.includes(p)) await deletePiece(p.id);
+              else await removeLearner(p.id);
+            }
+            if ([existing.id, ...theirs.map((p) => p.id)].some((pid) => session.exitTo.includes(pid))) session.exitTo = '/';
           }
           await del('players', existing.id);
           closeSheet();
@@ -136,14 +150,28 @@ export async function parentHome(_, ctx) {
   const safe = await navigator.storage?.persisted?.();
   const nameOf = (id) => players.find((p) => p.id === id)?.name || 'Nobody';
 
-  const pieceRows = [];
+  // One row for each piece, naming everyone learning it.
+  const groups = new Map();
   for (const piece of pieces) {
-    const progress = await progressMap(piece.id);
-    const bars = playableBars(piece);
-    const started = bars.filter((b) => topStage(piece, progress.get(b.id))).length;
-    pieceRows.push(h('button', { class: 'list-row', onClick: () => go(`/parent/piece/${piece.id}`) },
-      h('span', { class: 'row-main' }, piece.title),
-      h('span', { class: 'row-sub' }, `${nameOf(piece.playerId)}, ${started} of ${bars.length} bars started`)));
+    const key = groupOf(piece);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(piece);
+  }
+  const pieceRows = [];
+  for (const learners of groups.values()) {
+    const first = learners[0];
+    const bars = playableBars(first);
+    const started = [];
+    for (const piece of learners) {
+      const progress = await progressMap(piece.id);
+      started.push(bars.filter((b) => topStage(piece, progress.get(b.id))).length);
+    }
+    const sub = learners.length === 1
+      ? `${nameOf(first.playerId)}, ${started[0]} of ${bars.length} bars started`
+      : `${nameList(learners.map((p, i) => `${nameOf(p.playerId)} ${started[i]}`))} of ${bars.length} bars started`;
+    pieceRows.push(h('button', { class: 'list-row', onClick: () => go(`/parent/piece/${first.id}`) },
+      h('span', { class: 'row-main' }, first.title),
+      h('span', { class: 'row-sub' }, sub)));
   }
 
   async function saveBackup() {

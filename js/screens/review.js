@@ -1,5 +1,5 @@
 import { h, swapTo, fill, icon, sheet, closeSheet, toast } from '../ui.js';
-import { get, put } from '../store.js';
+import { get, all, put, savePiece, addLearner } from '../store.js';
 import { listBars, newId, rowsToLayoutRows } from '../model.js';
 import { findBars } from '../detect-client.js';
 import { pageUrl, forgetPage } from '../images.js';
@@ -15,8 +15,8 @@ export async function review([id], ctx) {
   if (!piece) return missing('That piece has gone.');
   let pi = 0;
   let saveTimer;
-  const save = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => put('pieces', piece), 200); };
-  const saveNow = () => { clearTimeout(saveTimer); return put('pieces', piece); };
+  const save = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => savePiece(piece), 200); };          // the bars are shared by everyone learning it
+  const saveNow = () => { clearTimeout(saveTimer); return savePiece(piece); };
 
   const stageEl = h('div', { class: 'review-page' });
   const summary = h('p', { class: 'review-sum' });
@@ -247,8 +247,15 @@ export async function review([id], ctx) {
   async function finish() {
     if (!total()) { toast('Add at least one bar first.'); return; }
     const wasDraft = piece.draft;
+    // Everyone ticked when it was added, leaving out anyone removed since.
+    const players = await all('players');
+    const everyone = [...new Set([piece.playerId, ...(piece.alsoFor || [])])].filter((pid) => players.some((p) => p.id === pid));
+    if (everyone.length) piece.playerId = everyone[0];
+    const alsoFor = everyone.slice(1);
     delete piece.draft;
+    delete piece.alsoFor;
     await saveNow();
+    for (const playerId of alsoFor) await addLearner(piece, playerId);
     if (wasDraft) {
       for (const pg of piece.layout) {
         const page = await get('pages', pg.pageId);

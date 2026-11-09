@@ -1,4 +1,4 @@
-import { h, go, goUp, icon, sheet, closeSheet, toast } from '../ui.js';
+import { h, go, goUp, fill, icon, sheet, closeSheet, toast } from '../ui.js';
 import { all, put, del } from '../store.js';
 import { KEYS, defaultStages, newId, rowsToLayoutRows } from '../model.js';
 import { findBars, pdfToImages } from '../detect-client.js';
@@ -27,8 +27,27 @@ export async function addPiece(_, ctx) {
   const save = () => put('pieces', piece);
 
   const title = h('input', { type: 'text', value: piece.title, autocomplete: 'off', onInput: (e) => { piece.title = e.target.value; if (piece.layout.length) save(); } });
-  const player = h('select', { onChange: (e) => { piece.playerId = e.target.value; if (piece.layout.length) save(); } },
-    players.map((p) => h('option', { value: p.id, selected: p.id === piece.playerId }, p.name)));
+  // Everyone ticked gets the piece when it is saved. The first is this record, the rest are added after.
+  const player = h('div', { class: 'learners' });
+  const chosen = () => [piece.playerId, ...(piece.alsoFor || [])].filter((pid) => players.some((p) => p.id === pid));
+  function drawWho() {
+    if (!chosen().length) piece.playerId = players[0].id;
+    fill(player, players.map((p) => h('label', { class: 'toggle' },
+      h('input', {
+        type: 'checkbox',
+        checked: chosen().includes(p.id),
+        onChange: (e) => {
+          const next = e.target.checked ? [...chosen(), p.id] : chosen().filter((pid) => pid !== p.id);
+          if (!next.length) { e.target.checked = true; toast('Choose who is learning it.'); return; }
+          const ordered = players.map((x) => x.id).filter((pid) => next.includes(pid));
+          piece.playerId = ordered[0];
+          piece.alsoFor = ordered.slice(1);
+          if (piece.layout.length) save();
+        },
+      }),
+      h('span', {}, p.name))));
+  }
+  drawWho();
   const key = h('select', { onChange: (e) => { piece.keySig = e.target.value; if (piece.layout.length) save(); } },
     KEYS.map((k) => h('option', { value: k.id, selected: k.id === piece.keySig }, k.label)));
 
@@ -113,7 +132,8 @@ export async function addPiece(_, ctx) {
       backTo('Grown-ups', '/parent'),
       h('h1', {}, 'Add a piece')),
     field('Name of the piece', title),
-    field('Who is learning it', player),
+    h('div', { class: 'field', role: 'group', 'aria-labelledby': 'who-label' },        // not a label: each name is its own
+      h('span', { class: 'field-label', id: 'who-label' }, 'Who is learning it'), player),
     h('div', { class: 'two' },
       h('div', { class: 'field' },
         h('span', { class: 'field-label' }, 'Full speed'),

@@ -16,7 +16,7 @@ export class Hearing {
 
   static async load(piece, get) {
     if (!piece.recording) return null;
-    const sound = await get('recordings', piece.id);
+    const sound = await get('recordings', piece.group || piece.id);         // shared by everyone learning it
     return sound ? new Hearing(piece, sound) : null;
   }
 

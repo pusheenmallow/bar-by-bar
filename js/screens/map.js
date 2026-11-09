@@ -7,7 +7,7 @@ import {
 import { drawBars } from '../images.js';
 import { cssVar } from '../theme.js';
 import { session } from '../session.js';
-import { missing, stepper, backTo, doneButton, grownUpsButton } from './common.js';
+import { missing, stepper, backTo, doneButton, grownUpsButton, learnerTabs } from './common.js';
 import { gate } from './parent.js';
 import { scorePages, layer, hitPlace } from './score.js';
 import { practicePicker } from './pick.js';
@@ -28,6 +28,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
   const parent = grownUp;
   const person = await get('players', piece.playerId);
   const hearing = grownUp ? null : await Hearing.load(piece, get);
+  const tabs = grownUp ? await learnerTabs(piece, (other) => `/parent/bars/${other}`) : null;
   let painting = null;
   let viewing = 'stages';
   let tool = 'bar';
@@ -400,6 +401,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
       parent ? backTo('Piece settings', `/parent/piece/${id}`) : backTo(person ? `${person.name}’s pieces` : 'Pieces', `/player/${piece.playerId}`),
       h('h1', {}, piece.title),
       parent ? doneButton() : grownUpsButton(`/parent/piece/${id}`)),
+    tabs,
     clockEl,
     !parent && modeEl,
     hintEl,

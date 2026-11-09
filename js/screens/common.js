@@ -1,6 +1,7 @@
-import { h, go, goUp, icon } from '../ui.js';
+import { h, go, goUp, swapTo, icon } from '../ui.js';
 import { session } from '../session.js';
 import { SPEEDS, SPEED_STEP, speedTempo, speedPercent } from '../model.js';
+import { all, learnersOf } from '../store.js';
 
 export const missing = (text) => h('main', { class: 'screen' },
   h('p', { class: 'lead' }, text),
@@ -12,6 +13,21 @@ export const backTo = (label, path) => h('button', { class: 'back', onClick: () 
 export function leaveGrownUps() {
   session.parent = false;
   goUp(session.exitTo);
+}
+
+// On a piece several people learn, grown-ups look at one learner's progress at a time.
+export async function learnerTabs(piece, pathFor) {
+  const learners = await learnersOf(piece);
+  if (learners.length < 2) return null;
+  const players = await all('players');
+  const nameOf = (playerId) => players.find((p) => p.id === playerId)?.name || 'Someone';
+  return h('div', { class: 'learner-tabs', role: 'group', 'aria-label': 'Whose progress to show' },
+    h('span', { class: 'learner-label' }, 'Showing'),
+    learners.map((l) => h('button', {
+      class: `seg ${l.id === piece.id ? 'on' : ''}`,
+      'aria-pressed': String(l.id === piece.id),
+      onClick: () => { if (l.id !== piece.id) swapTo(pathFor(l.id)); },
+    }, nameOf(l.playerId))));
 }
 
 export const doneButton = () => h('button', { class: 'btn lock', onClick: leaveGrownUps }, 'Done');

@@ -5,6 +5,9 @@ export const penVar = (pen) => `var(--tick-${pen})`;
 export const PLAYER_PENS = ['sky', 'grape', 'gum', 'lemon', 'lime', 'mint'];
 const STAGE_PEN_ORDER = ['sky', 'grape', 'gum', 'lemon', 'lime', 'gold', 'peach', 'mint'];
 
+// “Ana and Ben”, or “Ana, Ben and Cal”.
+export const nameList = (names) => (names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`);
+
 export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 export const defaultStages = () => [

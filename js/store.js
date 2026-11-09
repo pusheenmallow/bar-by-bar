@@ -1,3 +1,4 @@
+import { newId } from './model.js';
 // Everything the app remembers lives in IndexedDB on this device.
 
 const NAME = 'bar-by-bar';
@@ -78,15 +79,76 @@ export async function progressMap(pieceId) {
   return new Map(rows.map((p) => [p.barId, p]));
 }
 
+/* ---------- pieces several people learn ---------- */
+// Each person learning a piece has their own record, which keeps their progress apart.
+// Records in a group share the music: pages, bars, the teacher's recording and the settings.
+
+export const groupOf = (piece) => piece.group || piece.id;
+const PERSONAL = ['id', 'playerId', 'createdAt', 'runTempo', 'draft'];
+
+export async function learnersOf(piece) {
+  const group = groupOf(piece);
+  return (await all('pieces'))
+    .filter((p) => !p.draft && groupOf(p) === group)
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+function shared(from, to) {
+  const out = {};
+  for (const [k, v] of Object.entries(from)) if (!PERSONAL.includes(k)) out[k] = v;
+  for (const k of PERSONAL) if (to[k] !== undefined) out[k] = to[k];
+  return out;
+}
+
+// Saves a piece, and its shared parts for everyone else learning it.
+export async function savePiece(piece) {
+  const others = piece.draft ? [] : (await learnersOf(piece)).filter((p) => p.id !== piece.id);
+  const db = await open();
+  const tx = db.transaction('pieces', 'readwrite');
+  const os = tx.objectStore('pieces');
+  os.put(piece);
+  others.forEach((other) => os.put(shared(piece, other)));
+  await finished(tx);
+}
+
+export async function addLearner(piece, playerId) {
+  const already = (await learnersOf(piece)).find((p) => p.playerId === playerId);
+  if (already) return already;
+  piece.group = groupOf(piece);
+  const copy = shared(piece, { id: newId(), playerId, createdAt: Date.now() });
+  await savePiece(piece);
+  await put('pieces', copy);
+  return copy;
+}
+
+// One person stops learning a piece. Their progress, tries and time go. The music stays for the others.
+export async function removeLearner(pieceId) {
+  const db = await open();
+  const tx = db.transaction(['pieces', 'progress', 'attempts', 'time'], 'readwrite');
+  tx.objectStore('pieces').delete(pieceId);
+  for (const store of ['progress', 'attempts', 'time']) {
+    const os = tx.objectStore(store);
+    const keys = await done(os.index('pieceId').getAllKeys(pieceId));
+    keys.forEach((k) => os.delete(k));
+  }
+  await finished(tx);
+}
+
+// The piece goes for everyone: every learner's progress, the pages and the recording.
 export async function deletePiece(pieceId) {
+  const piece = await get('pieces', pieceId);
+  const group = piece ? groupOf(piece) : pieceId;
+  const ids = new Set([pieceId, group, ...(piece ? (await learnersOf(piece)).map((p) => p.id) : [])]);
   const db = await open();
   const tx = db.transaction(['pieces', 'pages', 'progress', 'attempts', 'time', 'recordings'], 'readwrite');
-  tx.objectStore('pieces').delete(pieceId);
-  tx.objectStore('recordings').delete(pieceId);
-  for (const [store, index] of [['pages', 'pieceId'], ['progress', 'pieceId'], ['attempts', 'pieceId'], ['time', 'pieceId']]) {
-    const os = tx.objectStore(store);
-    const keys = await done(os.index(index).getAllKeys(pieceId));
-    keys.forEach((k) => os.delete(k));
+  tx.objectStore('recordings').delete(group);
+  for (const id of ids) {
+    tx.objectStore('pieces').delete(id);
+    for (const store of ['pages', 'progress', 'attempts', 'time']) {
+      const os = tx.objectStore(store);
+      const keys = await done(os.index('pieceId').getAllKeys(id));
+      keys.forEach((k) => os.delete(k));
+    }
   }
   await finished(tx);
 }

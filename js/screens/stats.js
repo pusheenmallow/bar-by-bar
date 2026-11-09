@@ -2,7 +2,7 @@ import { h, fill } from '../ui.js';
 import { get, byIndex, timeDocs, dayTotal, timeSaved } from '../store.js';
 import { MODES, playableBars, dayKey, goalSeconds, timeText, clockText, numberRanges } from '../model.js';
 import { session } from '../session.js';
-import { missing, backTo, doneButton } from './common.js';
+import { missing, backTo, doneButton, learnerTabs } from './common.js';
 import { gate } from './parent.js';
 
 const RANGES = [
@@ -178,12 +178,14 @@ export async function stats([id], ctx, grownUp = false) {
   }
 
   ctx.onShow(draw);
+  const tabs = grownUp ? await learnerTabs(piece, (other) => `/parent/stats/${other}`) : null;
 
   return h('main', { class: 'screen stats' },
     h('header', { class: 'bar-top' },
       grownUp ? backTo('Piece settings', `/parent/piece/${id}`) : backTo('My piece', `/piece/${id}`),
       h('h1', {}, piece.title),
       grownUp ? doneButton() : null),
+    tabs,
     h('section', { class: 'block flat' },
       h('h2', {}, 'Minutes a day, last 14 days'),
       dailyChart(chartRows, goal)),

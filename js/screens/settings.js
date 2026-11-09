@@ -1,6 +1,6 @@
-import { h, go, goUp, icon, confirmSheet } from '../ui.js';
-import { get, put, all, byIndex, deletePiece } from '../store.js';
-import { KEYS, MASTERY_RUN, goodRun, penVar, listBars, mistakeList, newId, nextPen, clockText } from '../model.js';
+import { h, go, goUp, swapTo, fill, icon, confirmSheet, toast } from '../ui.js';
+import { get, all, byIndex, deletePiece, savePiece, learnersOf, addLearner, removeLearner } from '../store.js';
+import { KEYS, MASTERY_RUN, goodRun, penVar, listBars, mistakeList, newId, nextPen, clockText, nameList } from '../model.js';
 import { placedCount } from '../marks.js';
 import { session } from '../session.js';
 import { field, stepper, missing, backTo, doneButton } from './common.js';
@@ -42,8 +42,46 @@ export async function settings([id], ctx) {
   const piece = await get('pieces', id);
   if (!piece) return missing('That piece has gone.');
   const players = (await all('players')).sort((a, b) => a.createdAt - b.createdAt);
-  const attempts = await byIndex('attempts', 'pieceId', id);
-  const save = () => put('pieces', piece);
+  const learners = await learnersOf(piece);
+  const attempts = (await Promise.all(learners.map((l) => byIndex('attempts', 'pieceId', l.id)))).flat();     // everyone's tries
+  const save = () => savePiece(piece);                // settings are shared by everyone learning the piece
+  const nameOf = (playerId) => players.find((p) => p.id === playerId)?.name || 'Someone';
+
+  // Who is learning it. Each person gets their own progress on the same music.
+  const whoBox = h('div', { class: 'learners', role: 'group', 'aria-label': 'Who is learning it' });
+  function drawWho() {
+    fill(whoBox, players.map((p) => h('label', { class: 'toggle' },
+      h('input', { type: 'checkbox', checked: learners.some((l) => l.playerId === p.id), onChange: (e) => toggleLearner(p, e.target) }),
+      h('span', {}, p.name))));
+  }
+  async function toggleLearner(player, input) {
+    const mine = learners.find((l) => l.playerId === player.id);
+    if (input.checked) {
+      if (mine) return;
+      learners.push(await addLearner(piece, player.id));
+      toast(`${player.name} can practise “${piece.title}” now.`);
+    } else {
+      if (!mine) return;
+      if (learners.length === 1) {
+        input.checked = true;
+        toast('Someone needs to be learning it. To remove the piece, use Delete piece below.');
+        return;
+      }
+      const yes = await confirmSheet({
+        title: `Take ${player.name} off this piece?`,
+        body: `${player.name}’s progress, notes and practice time on it will be deleted. Everyone else keeps theirs.`,
+        yes: `Take ${player.name} off`,
+        danger: true,
+      });
+      if (!yes) { input.checked = true; return; }
+      await removeLearner(mine.id);
+      learners.splice(learners.indexOf(mine), 1);
+      if (session.exitTo.includes(mine.id)) session.exitTo = '/';
+      if (mine.id === id) { swapTo(`/parent/piece/${learners[0].id}`); return; }
+    }
+    drawWho();
+  }
+  drawWho();
 
   const stageList = h('div', { class: 'stage-edit' });
 
@@ -100,6 +138,11 @@ export async function settings([id], ctx) {
       h('button', { class: 'btn', onClick: () => go(`/parent/review/${id}`) }, 'Check the boxes')),
 
     h('section', { class: 'block' },
+      h('h2', {}, 'Who is learning it'),
+      whoBox,
+      h('p', { class: 'field-hint' }, 'Each person keeps their own progress, notes and practice time. The pages, bars, recording and settings are shared.')),
+
+    h('section', { class: 'block' },
       h('h2', {}, 'Teacher’s recording'),
       piece.recording
         ? h('p', {}, `${clockText(piece.recording.duration)} long. ${placedCount(piece.recording.marks)} of ${piece.recording.marks.lines.length} bars placed.`)
@@ -108,13 +151,12 @@ export async function settings([id], ctx) {
 
     h('section', { class: 'block' },
       h('h2', {}, 'Mistake patterns'),
+      learners.length > 1 && h('p', { class: 'field-hint' }, 'Everyone’s tries together. Stats shows each person’s.'),
       patterns(piece, attempts)),
 
     h('section', { class: 'block' },
       h('h2', {}, 'Details'),
       field('Name of the piece', h('input', { type: 'text', value: piece.title, onChange: (e) => { piece.title = e.target.value.trim() || piece.title; save(); } })),
-      field('Who is learning it', h('select', { onChange: (e) => { piece.playerId = e.target.value; save(); } },
-        players.map((p) => h('option', { value: p.id, selected: p.id === piece.playerId }, p.name)))),
       h('div', { class: 'two' },
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Full speed'),
           stepper({ label: 'Full speed in beats a minute', value: piece.tempo, min: 30, max: 240, step: 2, format: (v) => `♩ = ${v}`, onChange: (v) => { piece.tempo = v; save(); } })),
@@ -142,10 +184,13 @@ export async function settings([id], ctx) {
       h('button', {
         class: 'btn danger',
         onClick: async () => {
-          const yes = await confirmSheet({ title: `Delete “${piece.title}”?`, body: 'Its pages and all progress will be removed from this tablet.', yes: 'Delete piece', danger: true });
+          const body = learners.length > 1
+            ? `Its pages, recording and everyone’s progress on it (${nameList(learners.map((l) => nameOf(l.playerId)))}) will be removed from this tablet.`
+            : 'Its pages and all progress will be removed from this tablet.';
+          const yes = await confirmSheet({ title: `Delete “${piece.title}”?`, body, yes: 'Delete piece', danger: true });
           if (!yes) return;
           await deletePiece(id);
-          if (session.exitTo.includes(id)) session.exitTo = '/';
+          if (learners.some((l) => session.exitTo.includes(l.id))) session.exitTo = '/';
           goUp('/parent');
         },
       }, 'Delete piece')));

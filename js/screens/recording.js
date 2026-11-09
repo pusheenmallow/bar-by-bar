@@ -1,5 +1,5 @@
 import { h, fill, icon, toast, sheet, closeSheet, confirmSheet } from '../ui.js';
-import { get, put, del } from '../store.js';
+import { get, put, del, savePiece, groupOf } from '../store.js';
 import { listBars, clockText } from '../model.js';
 import { session } from '../session.js';
 import { cssVar } from '../theme.js';
@@ -34,7 +34,8 @@ export async function recordingScreen([id], ctx) {
   let gone = false;
   ctx.onLeave(() => { gone = true; recorder?.cancel(); recorder = null; closeEditor?.(); });
 
-  const saved = piece.recording ? await get('recordings', id) : null;
+  const group = groupOf(piece);                      // everyone learning the piece shares the recording
+  const saved = piece.recording ? await get('recordings', group) : null;
   if (saved) edit(saved); else intro();
   return root;
 
@@ -119,12 +120,12 @@ export async function recordingScreen([id], ctx) {
       const ready = await prepare(blob);
       if (gone) return;
       const sound = {
-        pieceId: id, blob: ready.blob, peaks: ready.peaks, onsets: ready.onsets, strengths: ready.strengths,
+        pieceId: group, blob: ready.blob, peaks: ready.peaks, onsets: ready.onsets, strengths: ready.strengths,
         start: ready.start, end: ready.end, duration: ready.duration, added: Date.now(),
       };
       await put('recordings', sound);
       piece.recording = { duration: ready.duration, added: sound.added, marks: freshMarks(bars, ready.start, ready.end) };
-      await put('pieces', piece);
+      await savePiece(piece);
       edit(sound);
       toast('Lines are spread evenly to start. Tap along or drag them into place.');
     } catch (err) {
@@ -153,7 +154,7 @@ export async function recordingScreen([id], ctx) {
     const refresh = () => { at = times(marks); };
 
     let saveTimer = 0;
-    const save = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveTimer = 0; put('pieces', piece); }, 300); };
+    const save = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { saveTimer = 0; savePiece(piece); }, 300); };
     const snapshot = () => JSON.stringify({ lines: marks.lines, end: marks.end });
     const remember = (state = snapshot()) => {
       undo.push(state);
@@ -624,9 +625,9 @@ export async function recordingScreen([id], ctx) {
       if (!yes) return;
       closeEditor?.();
       closeEditor = null;
-      await del('recordings', id);
+      await del('recordings', group);
       delete piece.recording;
-      await put('pieces', piece);
+      await savePiece(piece);
       intro();
     }
 
@@ -742,7 +743,7 @@ export async function recordingScreen([id], ctx) {
     window.addEventListener('themechange', redraw);
 
     closeEditor = () => {
-      if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; put('pieces', piece); }
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = 0; savePiece(piece); }
       ro.disconnect();
       window.removeEventListener('themechange', redraw);
       clip.close();

@@ -264,6 +264,52 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 .time-key .tray-name { font-size: .92rem; margin-right: 12px; }
 .key-note { flex-basis: 100%; }
 
+/* ---------- the teacher's recording ---------- */
+.rec-body { display: flex; flex-direction: column; gap: 14px; }
+.rec-intro { gap: 14px; }
+.warn { color: var(--danger); }
+.rec-now { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 0; }
+.rec-state { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+.rec-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--danger); animation: rec-pulse 1.2s ease-in-out infinite; }
+@keyframes rec-pulse { 50% { opacity: .35; } }
+.rec-time { font-size: 2.6rem; font-weight: 300; font-variant-numeric: tabular-nums; }
+.rec-live { display: block; width: min(100%, 640px); height: 110px; }
+.rec-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rec-summary { color: var(--ink-2); }
+.rec-top .btn { min-height: 44px; padding: 4px 14px; }
+.rec-music-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.rec-music {
+  position: relative; width: 100%; height: clamp(140px, 22vh, 280px);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--score-paper); border-radius: var(--r); overflow: hidden;
+}
+.rec-music canvas { display: block; max-width: 100%; mix-blend-mode: multiply; }
+.rec-music-label { min-height: 1.3em; font-size: .85rem; color: var(--ink-2); }
+.rec-waves { display: flex; flex-direction: column; gap: 8px; }
+.rec-wave {
+  display: block; width: 100%; height: 190px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.rec-over { display: block; width: 100%; height: 38px; background: var(--raised); border-radius: 8px; touch-action: none; }
+.rec-transport { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.round.play-round { width: 58px; height: 58px; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.rec-clock { min-width: 120px; color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: .92rem; }
+.rec-speed { display: flex; gap: 4px; }
+.rec-speed .seg { min-height: 44px; padding: 6px 10px; }
+.zoom { display: flex; gap: 6px; }
+.rec-line { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: var(--raised); border-radius: var(--r); }
+.rec-line-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.rec-line-head strong { font-size: 1.1rem; font-weight: 500; }
+.rec-line-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.rec-line-tools .btn { min-height: 46px; padding: 6px 14px; background: var(--surface); }
+.line-tag { align-self: center; padding: 2px 9px; border-radius: 99px; font-size: .75rem; line-height: 1.4; }
+.line-tag.placed { background: var(--ink); color: var(--paper); }
+.line-tag.guess { border: 1px dashed var(--ink-2); color: var(--ink-2); }
+.rec-tap { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.answer.tap-big { flex: 1 1 320px; min-height: 86px; font-size: 1.15rem; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.rec-help { max-width: 40em; }
+
 /* ---------- gentle changes ---------- */
 ::view-transition { pointer-events: none; }        /* a quick tap still lands during a fade */
 ::view-transition-group(root), ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; animation-timing-function: ease-out; }
@@ -290,7 +336,7 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 }
 .sheet.wide { width: min(900px, 100%); }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; }
-.crop { display: flex; justify-content: center; background: var(--score-paper); border-radius: var(--r); overflow: hidden; }
+.crop { position: relative; display: flex; justify-content: center; background: var(--score-paper); border-radius: var(--r); overflow: hidden; }
 .crop canvas { display: block; max-width: 100%; mix-blend-mode: multiply; }
 .bar-body { display: flex; flex-direction: column; gap: 12px; }
 .chunk-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -392,6 +438,13 @@ textarea, input[type='text'], input[type='number'], select {
 .crotchet { font-family: 'Music Signs', var(--font); font-size: 1.2em; line-height: 1; }
 .met-toggle { min-height: 46px; }
 .met-toggle.running { border-color: var(--brass); color: var(--brass-text); }
+.met-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.btn.hear.running { border-color: var(--brass); color: var(--brass-text); }
+.bar-actions { display: flex; gap: 10px; width: 100%; }
+.bar-actions .btn.primary { flex: 1; width: auto; }
+.follow { position: absolute; z-index: 2; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--brass); box-shadow: 0 0 0 1px rgba(255, 255, 255, .55); pointer-events: none; }
+.follow[hidden] { display: none; }
+audio.clip { display: none; }
 .speed { width: 100%; }
 .speed-range {
   display: block; width: 100%; height: 40px; margin: 0; padding: 0;

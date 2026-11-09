@@ -11,6 +11,7 @@ import { parentHome } from './screens/parent.js';
 import { addPiece } from './screens/add.js';
 import { review } from './screens/review.js';
 import { settings } from './screens/settings.js';
+import { recordingScreen } from './screens/recording.js';
 import { session } from './session.js';
 
 const routes = [
@@ -27,6 +28,7 @@ const routes = [
   [/^\/parent\/piece\/([^/]+)$/, settings],
   [/^\/parent\/bars\/([^/]+)$/, (args, ctx) => mapScreen(args, ctx, true)],
   [/^\/parent\/stats\/([^/]+)$/, (args, ctx) => stats(args, ctx, true)],
+  [/^\/parent\/recording\/([^/]+)$/, recordingScreen],
 ];
 
 const app = document.getElementById('app');

@@ -207,6 +207,12 @@ export function icon(name, size = 28) {
     rotate: 'M4 12a8 8 0 1 0 3-6.2M4 4v5h5',
     lock: 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z',
     sound: 'M4 10v4h4l5 4V6l-5 4zM16 9a4 4 0 0 1 0 6',
+    mic: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM6 11a6 6 0 0 0 12 0M12 17v4m-3 0h6',
+    file: 'M12 15V4m-4 4 4-4 4 4M5 14v6h14v-6',
+    pause: 'M8 5v14M16 5v14',
+    undo: 'M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
+    prev: 'm15 18-6-6 6-6',
+    next: 'm9 6 6 6-6 6',
   };
   return h('svg:svg', { viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': 2.3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
     h('svg:path', { d: paths[name] }));

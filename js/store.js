@@ -1,7 +1,7 @@
 // Everything the app remembers lives in IndexedDB on this device.
 
 const NAME = 'bar-by-bar';
-const VERSION = 2;
+const VERSION = 3;
 let opened;
 
 function open() {
@@ -22,6 +22,7 @@ function open() {
       make('progress', { keyPath: 'key' }, 'pieceId');
       make('attempts', { keyPath: 'id', autoIncrement: true }, 'pieceId');
       make('time', { keyPath: 'key' }, 'pieceId');              // added in version 2
+      make('recordings', { keyPath: 'pieceId' });               // added in version 3
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -79,8 +80,9 @@ export async function progressMap(pieceId) {
 
 export async function deletePiece(pieceId) {
   const db = await open();
-  const tx = db.transaction(['pieces', 'pages', 'progress', 'attempts', 'time'], 'readwrite');
+  const tx = db.transaction(['pieces', 'pages', 'progress', 'attempts', 'time', 'recordings'], 'readwrite');
   tx.objectStore('pieces').delete(pieceId);
+  tx.objectStore('recordings').delete(pieceId);
   for (const [store, index] of [['pages', 'pieceId'], ['progress', 'pieceId'], ['attempts', 'pieceId'], ['time', 'pieceId']]) {
     const os = tx.objectStore(store);
     const keys = await done(os.index(index).getAllKeys(pieceId));
@@ -148,6 +150,11 @@ export async function exportAll() {
     const { blob, original, ...rest } = p;
     out.pages.push({ ...rest, data: await toDataUrl(blob) });
   }
+  out.recordings = [];
+  for (const r of await all('recordings')) {
+    const { blob, peaks, onsets, strengths, ...rest } = r;
+    out.recordings.push({ ...rest, data: await toDataUrl(blob), peaks: Array.from(peaks), onsets: Array.from(onsets), strengths: Array.from(strengths) });
+  }
   return new Blob([JSON.stringify(out)], { type: 'application/json' });
 }
 
@@ -157,9 +164,15 @@ export async function importAll(file) {
   if (data.app !== 'bar-by-bar' || data.backupVersion !== 1) throw new Error('This file is not a Bar by Bar backup.');
   const pages = [];
   for (const { data: url, ...rest } of data.pages) pages.push({ ...rest, blob: await fromDataUrl(url) });
+  const recordings = [];
+  for (const { data: url, peaks, onsets, strengths, ...rest } of data.recordings || []) {      // older backups have none
+    recordings.push({
+      ...rest, blob: await fromDataUrl(url), peaks: Uint8Array.from(peaks), onsets: Float32Array.from(onsets), strengths: Uint8Array.from(strengths),
+    });
+  }
 
   const db = await open();
-  const stores = ['meta', 'players', 'pieces', 'pages', 'progress', 'attempts', 'time'];
+  const stores = ['meta', 'players', 'pieces', 'pages', 'progress', 'attempts', 'time', 'recordings'];
   const tx = db.transaction(stores, 'readwrite');
   stores.forEach((s) => tx.objectStore(s).clear());
   data.meta.forEach((v) => tx.objectStore('meta').put(v));
@@ -169,5 +182,6 @@ export async function importAll(file) {
   data.progress.forEach((v) => tx.objectStore('progress').put(v));
   data.attempts.forEach((v) => tx.objectStore('attempts').put(v));
   (data.time || []).forEach((v) => tx.objectStore('time').put(v));     // older backups have none
+  recordings.forEach((v) => tx.objectStore('recordings').put(v));
   await finished(tx);
 }

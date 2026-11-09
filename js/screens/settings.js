@@ -1,6 +1,7 @@
 import { h, go, goUp, icon, confirmSheet } from '../ui.js';
 import { get, put, all, byIndex, deletePiece } from '../store.js';
-import { KEYS, MASTERY_RUN, goodRun, penVar, listBars, mistakeList, newId, nextPen } from '../model.js';
+import { KEYS, MASTERY_RUN, goodRun, penVar, listBars, mistakeList, newId, nextPen, clockText } from '../model.js';
+import { placedCount } from '../marks.js';
 import { session } from '../session.js';
 import { field, stepper, missing, backTo, doneButton } from './common.js';
 import { gate } from './parent.js';
@@ -97,6 +98,13 @@ export async function settings([id], ctx) {
       h('button', { class: 'btn primary', onClick: () => go(`/parent/bars/${id}`) }, 'Add notes and mark bars'),
       h('button', { class: 'btn', onClick: () => go(`/parent/stats/${id}`) }, 'Stats'),
       h('button', { class: 'btn', onClick: () => go(`/parent/review/${id}`) }, 'Check the boxes')),
+
+    h('section', { class: 'block' },
+      h('h2', {}, 'Teacher’s recording'),
+      piece.recording
+        ? h('p', {}, `${clockText(piece.recording.duration)} long. ${placedCount(piece.recording.marks)} of ${piece.recording.marks.lines.length} bars placed.`)
+        : h('p', { class: 'field-hint' }, 'Record the teacher playing the piece, so players can hear any bar at their practice speed.'),
+      h('button', { class: 'btn', onClick: () => go(`/parent/recording/${id}`) }, icon(piece.recording ? 'sound' : 'mic', 20), piece.recording ? 'Mark the bars' : 'Add a recording')),
 
     h('section', { class: 'block' },
       h('h2', {}, 'Mistake patterns'),

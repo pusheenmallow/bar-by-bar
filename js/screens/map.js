@@ -11,6 +11,7 @@ import { missing, stepper, backTo, doneButton, grownUpsButton } from './common.j
 import { gate } from './parent.js';
 import { scorePages, layer, hitPlace } from './score.js';
 import { practicePicker } from './pick.js';
+import { Hearing } from '../hear.js';
 
 const MAX_CHUNK = 12;
 const HEAT_STEPS = 4;              // one hue in the stylesheet: stronger means more time
@@ -26,6 +27,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
   const playable = playableBars(piece);
   const parent = grownUp;
   const person = await get('players', piece.playerId);
+  const hearing = grownUp ? null : await Hearing.load(piece, get);
   let painting = null;
   let viewing = 'stages';
   let tool = 'bar';
@@ -245,9 +247,24 @@ export async function mapScreen([id], ctx, grownUp = false) {
       heading,
       h('button', { class: 'round', 'aria-label': 'Close', onClick: () => closeSheet() }, icon('close')));
 
+    let drawnCrop = null;
     async function paintCrop() {
       const width = cropBox.clientWidth || 560;
-      await drawBars(cropBox.firstChild, chunk(), { width, height: count > 4 ? 300 : 220 });
+      drawnCrop = await drawBars(cropBox.firstChild, chunk(), { width, height: count > 4 ? 300 : 220 });
+    }
+
+    const hearBtn = hearing && h('button', { class: 'btn big hear', onClick: hear }, icon('sound', 22), 'Hear it');
+    function showHearing(on) {
+      if (!hearBtn) return;
+      fill(hearBtn, icon(on ? 'stop' : 'sound', 22), on ? 'Stop' : 'Hear it');
+      hearBtn.classList.toggle('running', on);
+    }
+    async function hear() {
+      if (hearing.playing) { hearing.stop(); return; }
+      showHearing(true);
+      const view = drawnCrop && { box: cropBox, canvas: cropBox.firstChild, spots: drawnCrop.spots };
+      const ok = await hearing.play(chunk(), { view, onEnd: () => showHearing(false) });
+      if (!ok) showHearing(false);
     }
 
     // Grown-ups tick off stages here. The player chooses a stage after tapping Practise.
@@ -333,10 +350,12 @@ export async function mapScreen([id], ctx, grownUp = false) {
             onChange: (v) => { count = v; paintCrop(); renderBody(); },
           })),
         parent && h('div', { class: 'stages' }, piece.stages.map(tickRow)),
-        !parent && h('button', {
-          class: 'btn primary big wide',
-          onClick: () => replaceSheet(practicePicker({ piece, bars: list, progress, back: showBar })),
-        }, `Practise ${barsLabel(list).toLowerCase()}`),
+        !parent && h('div', { class: 'bar-actions' },
+          hearing?.can(list) && (showHearing(hearing.playing), hearBtn),
+          h('button', {
+            class: 'btn primary big wide',
+            onClick: () => { hearing?.stop(); replaceSheet(practicePicker({ piece, bars: list, progress, back: showBar })); },
+          }, `Practise ${barsLabel(list).toLowerCase()}`)),
         count === 1 && (seconds || tries) ? h('p', { class: 'bar-facts' },
           `${timeText(seconds)} on bar ${bar.n}. ${tries ? `${p.clean} of ${tries} tries clean.` : ''}`) : null,
         h('label', { class: 'toggle' },
@@ -358,7 +377,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
       renderBody();
     }
 
-    sheet([head, cropBox, body], { kind: 'bar-sheet' });
+    sheet([head, cropBox, body], { kind: 'bar-sheet', onClose: () => hearing?.stop() });
     renderBody();
     requestAnimationFrame(() => paintCrop());
   }
@@ -373,6 +392,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
   ctx.onLeave(() => {
     ro.disconnect();
     window.removeEventListener('themechange', redraw);
+    hearing?.close();
   });
 
   return h('main', { class: 'screen map' },

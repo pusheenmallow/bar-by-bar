@@ -78,7 +78,7 @@ export async function drawBars(canvas, bars, box) {
       const c = cuts[i];
       const w = widths[i] * plan.scale * dpr, ht = height * plan.scale * dpr;
       ctx.drawImage(c.img, c.sx, c.sy, c.sw, c.sh, x, y, w, ht);
-      spots.push({ bar: bars[i], left: x / dpr, top: y / dpr, width: w / dpr });
+      spots.push({ bar: bars[i], left: x / dpr, top: y / dpr, width: w / dpr, height: ht / dpr });
       x += w;
     });
   });

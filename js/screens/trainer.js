@@ -10,6 +10,7 @@ import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { stickOn, peelOff, fanfare, crownFanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
 import { missing, speedControl, backTo } from './common.js';
+import { Hearing } from '../hear.js';
 
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -34,6 +35,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   const met = new Metronome();
   met.bpm = tempo;
   met.beats = piece.beats || 4;
+  const hearing = await Hearing.load(piece, get);
 
   const coach = h('div', { class: 'coach', 'aria-live': 'polite' });
   const showHint = () => fill(coach, h('p', { class: 'goal' }, stage.hint, stage.dynamics ? ' Dynamics count.' : ''));
@@ -76,9 +78,27 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     class: 'btn met-toggle',
     onClick: async () => {
       clock.touch();
-      if (met.running) met.stop(); else await startMetronome();
+      if (met.running) met.stop();
+      else { hearing?.stop(); await startMetronome(); }
     },
   }, icon('play', 24), 'Metronome');
+
+  /* ---------- the teacher's recording ---------- */
+  const hearBtn = hearing && h('button', { class: 'btn met-toggle hear', onClick: hear }, icon('sound', 24), 'Hear it');
+  function showHearing(on) {
+    fill(hearBtn, icon(on ? 'stop' : 'sound', 24), on ? 'Stop' : 'Hear it');
+    hearBtn.classList.toggle('running', on);
+  }
+  async function hear() {
+    clock.touch();
+    if (hearing.playing) { hearing.stop(); return; }
+    if (!hearing.can(bars)) { toast('These bars aren’t marked in the teacher’s recording yet.'); return; }
+    if (met.running) met.stop();
+    showHearing(true);
+    const view = lastDraw && { box: cropBox, canvas: crop, spots: lastDraw.spots };
+    const ok = await hearing.play(bars, { tempo, view, onEnd: () => showHearing(false) });
+    if (!ok) showHearing(false);
+  }
   function showMetronomeOff() {
     startBtn.replaceChildren(icon('play', 24), 'Metronome');
     startBtn.classList.remove('running');
@@ -364,6 +384,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   });
   ctx.onLeave(() => {
     saveSlip();
+    hearing?.close();
     ro.disconnect();
     clock.stop();
     met.dispose();
@@ -387,7 +408,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
           h('button', { class: 'round', 'aria-label': 'Slower', onClick: () => setTempo(tempo - 2) }, '−'),
           h('span', { class: 'tempo-read' }, h('span', { class: 'crotchet', 'aria-hidden': 'true' }, '♩'), ' = ', tempoEl),
           h('button', { class: 'round', 'aria-label': 'Faster', onClick: () => setTempo(tempo + 2) }, '+')),
-        startBtn,
+        h('div', { class: 'met-buttons' }, startBtn, hearBtn),
         speed.el),
       h('div', { class: 'run' }, slots, runLabel),
       h('div', { class: 'answers' },

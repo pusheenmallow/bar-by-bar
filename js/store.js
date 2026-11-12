@@ -2,28 +2,69 @@ import { newId, makeAttempt, withAttemptDefaults } from './model.js';
 // Everything the app remembers lives in IndexedDB on this device.
 
 const NAME = 'bar-by-bar';
-const VERSION = 3;
+const VERSION = 4;
 let opened;
 
-function open() {
-  if (opened) return opened;
-  opened = new Promise((resolve, reject) => {
-    const req = indexedDB.open(NAME, VERSION);
+/* ---------- the shape of the database ---------- */
+// Version 2 added `time`, version 3 `recordings`. Version 4 re-keyed `attempts`: see rekeyAttempts.
+
+function createAttempts(db) {
+  const store = db.createObjectStore('attempts', { keyPath: 'id' });
+  store.createIndex('pieceId', 'pieceId');
+  store.createIndex('day', 'day');
+  return store;
+}
+
+// Runs inside the upgrade. Anything thrown here, or any failed request, undoes the whole
+// upgrade and leaves the database exactly as it was.
+function upgrade(db, tx) {
+  const make = (name, options, index) => {
+    if (db.objectStoreNames.contains(name)) return;
+    const store = db.createObjectStore(name, options);
+    if (index) store.createIndex(index, index);
+  };
+  make('meta', { keyPath: 'key' });
+  make('players', { keyPath: 'id' });
+  make('pieces', { keyPath: 'id' }, 'playerId');
+  make('pages', { keyPath: 'id' }, 'pieceId');
+  make('progress', { keyPath: 'key' }, 'pieceId');
+  make('time', { keyPath: 'key' }, 'pieceId');
+  make('recordings', { keyPath: 'pieceId' });
+  if (!db.objectStoreNames.contains('attempts')) createAttempts(db);
+  else rekeyAttempts(db, tx);
+}
+
+// Version 4. Attempts used to be numbered by the database, 1, 2, 3 and so on, which two
+// devices could never agree on. Now each new attempt brings its own random id. The store has to
+// be made again for that, so every old attempt is copied across. Old attempts keep the number
+// they had, and gain a day, their player and the source 'legacy'. No other store is touched.
+function rekeyAttempts(db, tx) {
+  const old = tx.objectStore('attempts');
+  if (!old.autoIncrement) {                              // already done: only make sure of the indexes
+    for (const name of ['pieceId', 'day']) if (!old.indexNames.contains(name)) old.createIndex(name, name);
+    return;
+  }
+  const safely = (work) => () => {
+    try { work(); } catch (err) { console.warn('The attempts could not be moved, so the update was undone.', err); tx.abort(); }
+  };
+  const pieces = tx.objectStore('pieces').getAll();
+  pieces.onsuccess = safely(() => {
+    const playerOf = new Map(pieces.result.map((p) => [p.id, p.playerId]));
+    const rows = old.getAll();
+    rows.onsuccess = safely(() => {
+      const moved = rows.result.map((a) => withAttemptDefaults(a, (pieceId) => playerOf.get(pieceId)));
+      db.deleteObjectStore('attempts');
+      const fresh = createAttempts(db);
+      moved.forEach((a) => fresh.add(a));               // add, not put: two attempts can never share an id
+    });
+  });
+}
+
+function openAt(version) {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(NAME, version);
     req.onupgradeneeded = () => {
-      const db = req.result;
-      const make = (name, options, index) => {
-        if (db.objectStoreNames.contains(name)) return;
-        const store = db.createObjectStore(name, options);
-        if (index) store.createIndex(index, index);
-      };
-      make('meta', { keyPath: 'key' });
-      make('players', { keyPath: 'id' });
-      make('pieces', { keyPath: 'id' }, 'playerId');
-      make('pages', { keyPath: 'id' }, 'pieceId');
-      make('progress', { keyPath: 'key' }, 'pieceId');
-      make('attempts', { keyPath: 'id', autoIncrement: true }, 'pieceId');
-      make('time', { keyPath: 'key' }, 'pieceId');              // added in version 2
-      make('recordings', { keyPath: 'pieceId' });               // added in version 3
+      try { upgrade(req.result, req.transaction); } catch (err) { console.warn(err); req.transaction.abort(); }
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -32,6 +73,68 @@ function open() {
     };
     req.onerror = () => reject(req.error);
   });
+}
+
+// The database as it stands, without upgrading it. Null when this device has none yet.
+function peek() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(NAME);
+    let none = false;
+    req.onupgradeneeded = () => { none = true; req.transaction.abort(); };      // don't create an empty one here
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = (event) => {
+      if (!none) { reject(req.error); return; }
+      event.preventDefault();
+      resolve(null);
+    };
+  });
+}
+
+/* ---------- a backup before any upgrade ---------- */
+// An upgrade can't be undone once it has finished. So when an older database is found, the app
+// shell first has a backup file saved, and only then is the database opened at the new version.
+
+let upgradeGate = null;
+export function setUpgradeGate(gate) { upgradeGate = gate; }
+
+async function backupBeforeUpgrade() {
+  const db = await peek();
+  if (!db) return false;
+  try {
+    if (db.version >= VERSION) return false;
+    if (!upgradeGate) throw new Error('This data is from an older version of Bar by Bar. Open the app to update it.');
+    await upgradeGate({
+      from: db.version,
+      makeBackup: async () => {
+        const blob = await exportFrom(db);
+        const tx = db.transaction('meta', 'readwrite');
+        tx.objectStore('meta').put({ key: 'lastBackup', value: Date.now() });
+        await finished(tx);
+        return blob;
+      },
+    });
+    return true;
+  } finally {
+    db.close();
+  }
+}
+
+function open() {
+  if (opened) return opened;
+  const opening = (async () => {
+    const upgrading = await backupBeforeUpgrade();
+    try {
+      return await openAt(VERSION);
+    } catch (err) {
+      if (!upgrading) throw err;
+      const failure = new Error('The update could not finish, so nothing was changed.');
+      failure.upgradeFailed = true;
+      failure.cause = err;
+      throw failure;
+    }
+  })();
+  opened = opening;
+  opening.catch(() => { if (opened === opening) opened = null; });       // the next call tries again
   return opened;
 }
 
@@ -214,17 +317,23 @@ const fromDataUrl = async (url) => (await fetch(url)).blob();
 const BACKUP_VERSION = 2;
 
 export async function exportAll() {
-  const pages = await all('pages');
+  return exportFrom(await open());
+}
+
+// Reads whatever stores the database has, so it also works on an older one before its upgrade.
+async function exportFrom(db) {
+  const read = (name) => (db.objectStoreNames.contains(name) ? done(db.transaction(name).objectStore(name).getAll()) : []);
+  const pages = await read('pages');
   const out = {
     app: 'bar-by-bar',
     backupVersion: BACKUP_VERSION,
     savedAt: new Date().toISOString(),
-    meta: await all('meta'),
-    players: await all('players'),
-    pieces: await all('pieces'),
-    progress: await all('progress'),
-    attempts: await all('attempts'),
-    time: await all('time'),
+    meta: await read('meta'),
+    players: await read('players'),
+    pieces: await read('pieces'),
+    progress: await read('progress'),
+    attempts: await read('attempts'),
+    time: await read('time'),
     pages: [],
   };
   for (const p of pages) {
@@ -232,7 +341,7 @@ export async function exportAll() {
     out.pages.push({ ...rest, data: await toDataUrl(blob) });
   }
   out.recordings = [];
-  for (const r of await all('recordings')) {
+  for (const r of await read('recordings')) {
     const { blob, peaks, onsets, strengths, ...rest } = r;
     out.recordings.push({ ...rest, data: await toDataUrl(blob), peaks: Array.from(peaks), onsets: Array.from(onsets), strengths: Array.from(strengths) });
   }

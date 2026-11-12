@@ -122,6 +122,7 @@ export const dayKey = (ts) => {
 /* ---------- attempts ---------- */
 
 // One play that a player marked. Every screen builds its record here, so the fields can't drift apart.
+//   id           a random id made here, so it means the same on any device (older attempts keep their numbers)
 //   source       where it was played: 'trainer', 'check' or 'whole' ('legacy' for records from before these fields)
 //   at, day      the moment of the tap, and its local day
 //   metronomeOn  whether the metronome was ticking
@@ -140,6 +141,7 @@ export function makeAttempt({
   const before = earlier.filter((a) => (a.day || dayKey(a.at)) === day && a.barIds.some((id) => here.has(id))).length;
   return {
     ...extra,
+    id: crypto.randomUUID(),
     pieceId: piece.id, playerId: piece.playerId ?? null, barIds, stageId, result, tag, at, day, source,
     metronomeOn: !!metronomeOn, tempoSet,
     tempo: source === 'trainer' && metronomeOn ? tempoSet : null,
@@ -154,6 +156,7 @@ export function makeAttempt({
 export function withAttemptDefaults(a, playerOf = () => null) {
   return {
     ...a,
+    id: a.id ?? crypto.randomUUID(),
     day: a.day ?? dayKey(a.at),
     playerId: a.playerId ?? playerOf(a.pieceId) ?? null,
     source: a.source ?? 'legacy',

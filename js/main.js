@@ -13,6 +13,11 @@ import { review } from './screens/review.js';
 import { settings } from './screens/settings.js';
 import { recordingScreen } from './screens/recording.js';
 import { session } from './session.js';
+import { setUpgradeGate } from './store.js';
+import { upgradeGate, upgradeFailed } from './upgrade.js';
+
+// An older database is backed up before it is upgraded. Every screen waits for that.
+setUpgradeGate(upgradeGate);
 
 const routes = [
   [/^\/$/, home],
@@ -79,6 +84,8 @@ async function render() {
     onScreen = view;
     if (moved) await softly(swap, () => el); else swap();
   } catch (err) {
+    if (mine !== renderId) return;
+    if (err.upgradeFailed) { app.replaceChildren(upgradeFailed()); return; }
     console.error(err);
     app.replaceChildren(h('main', { class: 'screen' },
       h('p', { class: 'lead' }, `Something went wrong: ${err.message}`),

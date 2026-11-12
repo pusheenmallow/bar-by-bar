@@ -562,6 +562,9 @@ audio.clip { display: none; }
 .stage-line { display: flex; align-items: center; gap: 8px; }
 .stage-line input { flex: 1; min-width: 0; }
 
+.upgrade { align-items: center; justify-content: center; text-align: center; gap: 18px; min-height: 100dvh; }
+.upgrade .lead { max-width: 34rem; }
+.upgrade-status { max-width: 34rem; min-height: 3em; color: var(--ink-2); overflow-wrap: anywhere; }
 .gate { align-items: center; text-align: center; }
 .gate .bar-top { align-self: flex-start; }
 .pin-dots { display: flex; gap: 14px; margin: 10px 0; }

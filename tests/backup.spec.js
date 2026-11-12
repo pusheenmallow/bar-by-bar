@@ -89,6 +89,7 @@ test('a version 1 backup restores, with the new attempt fields filled in', async
   await page.goto('/');
   await restoreBackup(page, file);
   const snap = await snapshot(page);
+  expect(snap.version).toBe(4);
   expect(counts(snap)).toMatchObject({ players: 2, pieces: 2, pages: 1, progress: file.progress.length, attempts: 4, time: 0, recordings: 0 });
 
   const attempts = await attemptsFor(page, seeded.pieces.Pip);

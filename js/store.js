@@ -1,4 +1,4 @@
-import { newId } from './model.js';
+import { newId, makeAttempt } from './model.js';
 // Everything the app remembers lives in IndexedDB on this device.
 
 const NAME = 'bar-by-bar';
@@ -78,6 +78,22 @@ export async function progressMap(pieceId) {
   const rows = await byIndex('progress', 'pieceId', pieceId);
   return new Map(rows.map((p) => [p.barId, p]));
 }
+
+/* ---------- attempts ---------- */
+
+// Saves one marked play. Saves wait their turn, so each one sees the plays before it.
+let attemptQueue = Promise.resolve();
+
+export function addAttempt(piece, details) {
+  const job = attemptQueue.then(async () => {
+    const earlier = await byIndex('attempts', 'pieceId', piece.id);
+    return put('attempts', makeAttempt({ piece, ...details, earlier }));
+  });
+  attemptQueue = job.catch((err) => console.error(err));
+  return job;
+}
+
+export const attemptsSaved = () => attemptQueue;
 
 /* ---------- pieces several people learn ---------- */
 // Each person learning a piece has their own record, which keeps their progress apart.

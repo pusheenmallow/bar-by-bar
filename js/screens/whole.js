@@ -1,5 +1,5 @@
 import { h, goUp, icon, sticker, sheet, toast, softly } from '../ui.js';
-import { get, put, progressMap } from '../store.js';
+import { get, put, progressMap, addAttempt } from '../store.js';
 import {
   listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges,
 } from '../model.js';
@@ -25,6 +25,7 @@ export async function whole([id], ctx) {
   let state = 'ready';            // ready, playing, marking
   let began = 0;
   let played = 0;
+  let ticking = false;            // whether the metronome was on when the playing finished
   const slipped = new Set();
   let tempo = piece.runTempo || slowTempo(piece);
   const met = new Metronome();
@@ -129,6 +130,7 @@ export async function whole([id], ctx) {
   function stopPlaying() {
     clearInterval(tick);
     clock.stop();
+    ticking = met.running;
     met.stop();
     played = (Date.now() - began) / 1000;
     state = 'marking';
@@ -137,9 +139,9 @@ export async function whole([id], ctx) {
 
   async function done() {
     const list = playable.filter((b) => slipped.has(b.id));
-    await put('attempts', {
-      pieceId: id, mode: 'piece', barIds: playable.map((b) => b.id), slipBars: list.map((b) => b.id),
-      stageId: null, tempo: null, result: list.length ? 'slip' : 'clean', tag: null, at: Date.now(),
+    await addAttempt(piece, {
+      barIds: playable.map((b) => b.id), source: 'whole', result: list.length ? 'slip' : 'clean',
+      metronomeOn: ticking, tempoSet: tempo, extra: { mode: 'piece', slipBars: list.map((b) => b.id) },
     });
     for (const b of playable) {
       const p = progress.get(b.id) || blankProgress(id, b.id);

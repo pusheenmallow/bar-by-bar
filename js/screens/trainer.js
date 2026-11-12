@@ -1,5 +1,5 @@
 import { h, fill, goUp, swapTo, icon, sheet, closeSheet, sticker, crown, crownSticker, toast } from '../ui.js';
-import { get, put, progressMap, byIndex } from '../store.js';
+import { get, put, progressMap, byIndex, addAttempt } from '../store.js';
 import {
   penVar, listBars, barsLabel, blankProgress, mistakeList, rankMistakes, nextForBars, startTempo, clampTempo, easierTempo, fasterTempo,
   freshRun, afterClean, afterSlip, stageNeedsSpeed, goodRun, MASTERY_RUN, allCrowned,
@@ -130,11 +130,11 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   }
 
   /* ---------- saving ---------- */
-  async function record(result, tag = null) {
-    await put('attempts', {
-      pieceId: id, barIds: bars.map((b) => b.id), stageId: stage.id,
-      tempo: met.running ? tempo : null, result, tag, at: Date.now(),
-    });
+  // `tap` is how things stood when the button was tapped, which for a slip is before it is saved.
+  const tapNow = () => ({ at: Date.now(), metronomeOn: met.running, tempoSet: tempo, runGoal: target });
+
+  async function record(result, tag = null, tap = tapNow()) {
+    await addAttempt(piece, { barIds: bars.map((b) => b.id), stageId: stage.id, source: 'trainer', result, tag, ...tap });
     for (const b of bars) {
       const p = progress.get(b.id) || blankProgress(id, b.id);
       if (result === 'clean') p.clean += 1; else p.slips += 1;
@@ -312,23 +312,24 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   // A slip counts on the first tap. The reason and the tip appear on the screen, so nothing
   // covers the music, and the tip stays up during the next try with nothing to dismiss.
   const reasons = rankMistakes(mistakeList(piece, stage), tried, bars.map((b) => b.id));
-  let unsaved = false;
+  let unsaved = null;            // the slip waiting for its reason, as it stood at the tap
   let lastReason = null;
 
   function saveSlip(tag = null) {
     if (!unsaved) return;
-    unsaved = false;
-    record('slip', tag);
+    const tap = unsaved;
+    unsaved = null;
+    record('slip', tag, tap);
   }
 
   function slip() {
     if (ending) return;
     clock.touch();
     saveSlip();
+    unsaved = tapNow();
     run = afterSlip(run);
     showTokens('slip');
     peelOff();
-    unsaved = true;
     fill(coach, h('div', { class: 'chips' },
       h('span', { class: 'coach-ask' }, 'What happened?'),
       reasons.map((m) => h('button', {

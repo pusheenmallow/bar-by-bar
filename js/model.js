@@ -119,6 +119,36 @@ export const dayKey = (ts) => {
   return `${d.getFullYear()}-${m}-${day}`;
 };
 
+/* ---------- attempts ---------- */
+
+// One play that a player marked. Every screen builds its record here, so the fields can't drift apart.
+//   source       where it was played: 'trainer', 'check' or 'whole' ('legacy' for records from before these fields)
+//   at, day      the moment of the tap, and its local day
+//   metronomeOn  whether the metronome was ticking
+//   tempoSet     what the speed dial showed, ticking or not (null where there is no dial)
+//   tempo        the speed played with the metronome in the trainer, else null (as it always was)
+//   firstTryToday  no earlier play today touched any of these bars
+//   warmUps      next-day checks only: how many earlier plays today touched these bars
+//   runGoal      the clean-in-a-row goal in force, where there is one
+// `earlier` is this piece record's attempts so far. Each learner has their own record, so their days stay apart.
+export function makeAttempt({
+  piece, barIds, source, result, stageId = null, tag = null, at = Date.now(),
+  metronomeOn = false, tempoSet = null, runGoal = null, earlier = [], extra = {},
+}) {
+  const day = dayKey(at);
+  const here = new Set(barIds);
+  const before = earlier.filter((a) => (a.day || dayKey(a.at)) === day && a.barIds.some((id) => here.has(id))).length;
+  return {
+    ...extra,
+    pieceId: piece.id, playerId: piece.playerId ?? null, barIds, stageId, result, tag, at, day, source,
+    metronomeOn: !!metronomeOn, tempoSet,
+    tempo: source === 'trainer' && metronomeOn ? tempoSet : null,
+    firstTryToday: before === 0,
+    warmUps: source === 'check' ? before : null,
+    runGoal,
+  };
+}
+
 export const practiceStages = (piece) => piece.stages.filter((s) => s.pace !== 'nextday');
 export const checkStage = (piece) => piece.stages.find((s) => s.pace === 'nextday') || null;
 

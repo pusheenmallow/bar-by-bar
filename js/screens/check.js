@@ -1,5 +1,5 @@
 import { h, goUp, softly, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
-import { get, put, progressMap } from '../store.js';
+import { get, put, progressMap, addAttempt } from '../store.js';
 import { checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress } from '../model.js';
 import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
@@ -56,21 +56,23 @@ export async function check([id], ctx) {
 
   async function clean() {
     stickOn();
+    const at = Date.now();
     for (const b of groups[index]) await save(b, true);
-    await put('attempts', { pieceId: id, barIds: groups[index].map((b) => b.id), stageId: stage.id, tempo: null, result: 'clean', tag: null, at: Date.now() });
+    await addAttempt(piece, { barIds: groups[index].map((b) => b.id), stageId: stage.id, source: 'check', result: 'clean', at });
     advance();
   }
 
-  const recordSlip = async (bar, tag) => {
+  const recordSlip = async (bar, tag, at) => {
     for (const b of groups[index]) await save(b, b.id !== bar.id);
-    await put('attempts', { pieceId: id, barIds: [bar.id], stageId: stage.id, tempo: null, result: 'slip', tag, at: Date.now() });
+    await addAttempt(piece, { barIds: [bar.id], stageId: stage.id, source: 'check', result: 'slip', tag, at });
   };
 
   function slip() {
+    const at = Date.now();          // the slip happened now, not when the questions are answered
     const group = groups[index];
     const tags = (bar) => {
       let saved = false;
-      const finish = async (tag) => { if (saved) return; saved = true; await recordSlip(bar, tag); };
+      const finish = async (tag) => { if (saved) return; saved = true; await recordSlip(bar, tag, at); };
       replaceSheet([
         h('h2', {}, 'What happened?'),
         h('div', { class: 'chips' }, mistakeList(piece, stage).map((m) => h('button', {

@@ -5,6 +5,7 @@ import { themeChoice, setTheme } from '../theme.js';
 import { session } from '../session.js';
 import { isMuted, setMuted } from '../sound.js';
 import { field, busyPanel, doneButton, leaveGrownUps } from './common.js';
+import { shadowOn, setShadow } from '../shadow.js';
 
 const hash = async (pin) => {
   const bytes = new TextEncoder().encode(`bar-by-bar:${pin}`);
@@ -148,6 +149,7 @@ export async function parentHome(_, ctx) {
   const pieces = (await all('pieces')).filter((p) => !p.draft).sort((a, b) => a.createdAt - b.createdAt);
   const lastBackup = await getMeta('lastBackup');
   const safe = await navigator.storage?.persisted?.();
+  const shadowing = await shadowOn();
   const nameOf = (id) => players.find((p) => p.id === id)?.name || 'Nobody';
 
   // One row for each piece, naming everyone learning it.
@@ -269,5 +271,12 @@ export async function parentHome(_, ctx) {
       h('h2', {}, 'Sounds'),
       h('label', { class: 'toggle' },
         h('input', { type: 'checkbox', checked: !isMuted(), onChange: (e) => setMuted(!e.target.checked) }),
-        h('span', {}, 'Play sticker and celebration sounds'))));
+        h('span', {}, 'Play sticker and celebration sounds'))),
+
+    h('section', { class: 'block' },
+      h('h2', {}, 'Shadow grade'),
+      h('p', { class: 'field-hint' }, 'A check on how well “clean” and “slip” are being judged. While this is on, sit beside the player. After each of their taps a small prompt asks for your own answer. It changes nothing they see or earn. After 20 plays, each piece’s Stats shows how often you agreed.'),
+      h('label', { class: 'toggle' },
+        h('input', { type: 'checkbox', checked: shadowing, onChange: (e) => setShadow(e.target.checked) }),
+        h('span', {}, 'Ask for my answer after each play on this tablet'))));
 }

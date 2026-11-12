@@ -11,6 +11,7 @@ import { stickOn, peelOff, fanfare, crownFanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
 import { missing, speedControl, backTo } from './common.js';
 import { Hearing } from '../hear.js';
+import { Shadow } from '../shadow.js';
 
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -36,6 +37,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   met.bpm = tempo;
   met.beats = piece.beats || 4;
   const hearing = await Hearing.load(piece, get);
+  const shadow = await Shadow.load();          // null unless a grown-up is grading alongside
 
   const coach = h('div', { class: 'coach', 'aria-live': 'polite' });
   const showHint = () => fill(coach, h('p', { class: 'goal' }, stage.hint, stage.dynamics ? ' Dynamics count.' : ''));
@@ -118,6 +120,8 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
       slot.classList.toggle('after-good', forCrown && i === good);
       if (crownSlot && !slot.querySelector('.ghost')) slot.append(h('span', { class: 'ghost' }, crown(30)));
       const filled = i < run.tokens;
+      const peeling = slot.querySelector('.sticker.peel');
+      if (filled && peeling) peeling.remove();        // a clean play straight after a slip: the old sticker makes way now
       const has = !!slot.querySelector('.sticker');
       if (filled && !has) {
         slot.append(h('span', { class: `sticker ${change === 'clean' ? 'slap' : ''}` }, crownSlot ? crownSticker(52) : sticker(52)));
@@ -133,8 +137,11 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   // `tap` is how things stood when the button was tapped, which for a slip is before it is saved.
   const tapNow = () => ({ at: Date.now(), metronomeOn: met.running, tempoSet: tempo, runGoal: target });
 
-  async function record(result, tag = null, tap = tapNow()) {
-    await addAttempt(piece, { barIds: bars.map((b) => b.id), stageId: stage.id, source: 'trainer', result, tag, ...tap });
+  async function record(result, tag = null, { ticket = null, ...tap } = tapNow()) {
+    const attempt = await addAttempt(piece, {
+      barIds: bars.map((b) => b.id), stageId: stage.id, source: 'trainer', result, tag, ...tap, shadow: ticket?.grade ?? null,
+    });
+    shadow?.saved(ticket, attempt);
     for (const b of bars) {
       const p = progress.get(b.id) || blankProgress(id, b.id);
       if (result === 'clean') p.clean += 1; else p.slips += 1;
@@ -176,7 +183,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     ending = finished;
     showTokens('clean');
     stickOn();
-    await record('clean');
+    await record('clean', null, { ...tapNow(), ticket: shadow?.ask() });
     if (finished) await finishRun();
     else if (passedGood) await colourIn();
   }
@@ -326,7 +333,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     if (ending) return;
     clock.touch();
     saveSlip();
-    unsaved = tapNow();
+    unsaved = { ...tapNow(), ticket: shadow?.ask() };
     run = afterSlip(run);
     showTokens('slip');
     peelOff();
@@ -385,6 +392,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   });
   ctx.onLeave(() => {
     saveSlip();
+    shadow?.close();
     hearing?.close();
     ro.disconnect();
     clock.stop();

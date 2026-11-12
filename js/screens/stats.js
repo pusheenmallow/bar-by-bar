@@ -1,6 +1,7 @@
 import { h, fill } from '../ui.js';
-import { get, byIndex, timeDocs, dayTotal, timeSaved } from '../store.js';
-import { MODES, playableBars, dayKey, goalSeconds, timeText, clockText, numberRanges } from '../model.js';
+import { get, all, byIndex, timeDocs, dayTotal, timeSaved, attemptsSaved } from '../store.js';
+import { MODES, playableBars, dayKey, goalSeconds, timeText, clockText, numberRanges, shadowAgreement, SHADOW_ENOUGH } from '../model.js';
+import { shadowOn } from '../shadow.js';
 import { session } from '../session.js';
 import { missing, backTo, doneButton, learnerTabs } from './common.js';
 import { gate } from './parent.js';
@@ -77,6 +78,27 @@ function splitBar(totals) {
     h('div', { class: 'legend' }, MODES.map((m) => h('span', { class: 'legend-item' },
       h('i', { style: { background: m.colour } }), `${m.name} ${timeText(totals[m.id])}`))),
   ];
+}
+
+// For grown-ups only: how a grown-up's verdicts compared with the player's own, over all their pieces.
+async function shadowBlock(piece) {
+  await attemptsSaved();
+  const theirs = (await all('attempts')).filter((a) => a.playerId === piece.playerId);
+  const tally = shadowAgreement(theirs);
+  if (!tally.graded && !(await shadowOn())) return null;
+  const name = (await get('players', piece.playerId))?.name || 'The player';
+  const plays = (n) => `${n} ${n === 1 ? 'play' : 'plays'}`;
+  return h('section', { class: 'block shadow-stats' },
+    h('h2', {}, 'Shadow grading'),
+    tally.enough
+      ? [
+        h('p', {}, `You and ${name} agreed on ${tally.agreed} of ${plays(tally.graded)} (${tally.percent}%).`),
+        h('ul', { class: 'shadow-split' },
+          h('li', {}, `${name} said clean, you said slip: ${tally.childCleanAdultSlip}`),
+          h('li', {}, `${name} said slip, you said clean: ${tally.childSlipAdultClean}`)),
+      ]
+      : h('p', {}, `${tally.graded} of ${SHADOW_ENOUGH} plays graded so far. Agreement shows after ${SHADOW_ENOUGH}.`),
+    h('p', { class: 'field-hint' }, `Counts the plays you graded on all of ${name}’s pieces. Only grown-ups see this.`));
 }
 
 export async function stats([id], ctx, grownUp = false) {
@@ -189,5 +211,6 @@ export async function stats([id], ctx, grownUp = false) {
     h('section', { class: 'block flat' },
       h('h2', {}, 'Minutes a day, last 14 days'),
       dailyChart(chartRows, goal)),
-    body);
+    body,
+    grownUp ? await shadowBlock(piece) : null);
 }

@@ -4,7 +4,7 @@ import { test, expect, seedPiece, attemptsFor, finishStagesYesterday, openTraine
 
 const FIELDS = [
   'id', 'pieceId', 'playerId', 'barIds', 'stageId', 'result', 'tag', 'at', 'day', 'source',
-  'metronomeOn', 'tempoSet', 'tempo', 'firstTryToday', 'warmUps', 'runGoal',
+  'metronomeOn', 'tempoSet', 'tempo', 'firstTryToday', 'warmUps', 'runGoal', 'shadow',
 ];
 
 function expectEveryField(attempt) {

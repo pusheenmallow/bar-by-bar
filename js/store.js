@@ -196,6 +196,16 @@ export function addAttempt(piece, details) {
   return job;
 }
 
+// Adds a grown-up's verdict to a saved attempt.
+export function gradeAttempt(id, shadow) {
+  const job = attemptQueue.then(async () => {
+    const attempt = await get('attempts', id);
+    if (attempt) await put('attempts', { ...attempt, shadow });
+  });
+  attemptQueue = job.catch((err) => console.error(err));
+  return job;
+}
+
 export const attemptsSaved = () => attemptQueue;
 
 /* ---------- pieces several people learn ---------- */

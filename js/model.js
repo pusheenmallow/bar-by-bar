@@ -131,10 +131,11 @@ export const dayKey = (ts) => {
 //   firstTryToday  no earlier play today touched any of these bars
 //   warmUps      next-day checks only: how many earlier plays today touched these bars
 //   runGoal      the clean-in-a-row goal in force, where there is one
+//   shadow       a grown-up's own verdict on the same play, 'clean' or 'slip', when shadow grading is on
 // `earlier` is this piece record's attempts so far. Each learner has their own record, so their days stay apart.
 export function makeAttempt({
   piece, barIds, source, result, stageId = null, tag = null, at = Date.now(),
-  metronomeOn = false, tempoSet = null, runGoal = null, earlier = [], extra = {},
+  metronomeOn = false, tempoSet = null, runGoal = null, shadow = null, earlier = [], extra = {},
 }) {
   const day = dayKey(at);
   const here = new Set(barIds);
@@ -148,6 +149,7 @@ export function makeAttempt({
     firstTryToday: before === 0,
     warmUps: source === 'check' ? before : null,
     runGoal,
+    shadow,
   };
 }
 
@@ -165,6 +167,23 @@ export function withAttemptDefaults(a, playerOf = () => null) {
     firstTryToday: a.firstTryToday ?? null,
     warmUps: a.warmUps ?? null,
     runGoal: a.runGoal ?? null,
+    shadow: a.shadow ?? null,
+  };
+}
+
+// How often a grown-up's verdict matched the child's, over the plays the grown-up graded.
+// Shown only once there are enough plays for the number to mean something.
+export const SHADOW_ENOUGH = 20;
+export function shadowAgreement(attempts) {
+  const graded = attempts.filter((a) => a.shadow === 'clean' || a.shadow === 'slip');
+  const agreed = graded.filter((a) => a.shadow === a.result).length;
+  return {
+    graded: graded.length,
+    agreed,
+    percent: graded.length ? Math.round((agreed / graded.length) * 100) : null,
+    childCleanAdultSlip: graded.filter((a) => a.result === 'clean' && a.shadow === 'slip').length,
+    childSlipAdultClean: graded.filter((a) => a.result === 'slip' && a.shadow === 'clean').length,
+    enough: graded.length >= SHADOW_ENOUGH,
   };
 }
 

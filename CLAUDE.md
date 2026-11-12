@@ -12,3 +12,7 @@ This repo is PUBLIC. Never commit children's names, score images/photos, backup 
   printf '#!/bin/sh\ncd "$(git rev-parse --show-toplevel)" || exit 1\nexec node scripts/check-private.mjs\n' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
   ```
 - `.gitignore` is a second layer, not a substitute: it does not stop files that are already tracked or that are added with `git add -f`.
+
+## Tests
+
+`npm test` runs the Playwright tests in `tests/` (see the README). Run them before every commit that touches `js/`. Tests build their data in code. A backup needed by a test is made as an object in a `.js` file, never saved as `.json`.

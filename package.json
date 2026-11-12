@@ -1,0 +1,12 @@
+{
+  "name": "bar-by-bar",
+  "private": true,
+  "type": "module",
+  "description": "Tests for Bar by Bar. The app itself has no build step and no dependencies.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

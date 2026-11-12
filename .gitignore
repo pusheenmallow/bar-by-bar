@@ -10,3 +10,7 @@ node_modules/
 *.webp
 *.png
 !icons/*.png
+
+# Test output.
+test-results/
+playwright-report/

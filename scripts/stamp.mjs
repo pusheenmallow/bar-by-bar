@@ -4,7 +4,11 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const skip = new Set(['.git', 'scripts', 'README.md', 'sw.js']);
+// Left out of the stamp: nothing here is part of the app that a tablet downloads.
+const skip = new Set([
+  '.git', 'scripts', 'README.md', 'CLAUDE.md', 'sw.js',
+  'tests', 'node_modules', 'package.json', 'package-lock.json', 'playwright.config.js', 'test-results', 'playwright-report',
+]);
 const files = [];
 const walk = (dir) => {
   for (const name of readdirSync(dir).sort()) {
@@ -22,5 +26,10 @@ const appFiles = files.filter((f) => /\.(js|mjs|css|html|woff2|png|webmanifest)$
 const missing = appFiles.filter((f) => !listed.includes(f));
 if (missing.length) { console.error('Add these to sw.js:', missing.join(', ')); process.exit(1); }
 const version = hash.digest('hex').slice(0, 10);
-writeFileSync('sw.js', sw.replace(/const VERSION = '[^']*';/, `const VERSION = '${version}';`));
-console.log('sw.js version', version, `(${files.length} files)`);
+// `--dry` checks everything and changes nothing. The tests use it.
+if (process.argv.includes('--dry')) {
+  console.log('sw.js version would be', version, `(${files.length} files)`);
+} else {
+  writeFileSync('sw.js', sw.replace(/const VERSION = '[^']*';/, `const VERSION = '${version}';`));
+  console.log('sw.js version', version, `(${files.length} files)`);
+}

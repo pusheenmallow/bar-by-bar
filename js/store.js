@@ -1,4 +1,4 @@
-import { newId, makeAttempt } from './model.js';
+import { newId, makeAttempt, withAttemptDefaults } from './model.js';
 // Everything the app remembers lives in IndexedDB on this device.
 
 const NAME = 'bar-by-bar';
@@ -210,11 +210,14 @@ const toDataUrl = (blob) => new Promise((resolve, reject) => {
 });
 const fromDataUrl = async (url) => (await fetch(url)).blob();
 
+// Version 2 added the extra fields on attempts. Version 1 files still restore, with those fields filled in.
+const BACKUP_VERSION = 2;
+
 export async function exportAll() {
   const pages = await all('pages');
   const out = {
     app: 'bar-by-bar',
-    backupVersion: 1,
+    backupVersion: BACKUP_VERSION,
     savedAt: new Date().toISOString(),
     meta: await all('meta'),
     players: await all('players'),
@@ -239,7 +242,10 @@ export async function exportAll() {
 export async function importAll(file) {
   let data;
   try { data = JSON.parse(await file.text()); } catch { throw new Error('This file is not a Bar by Bar backup.'); }
-  if (data.app !== 'bar-by-bar' || data.backupVersion !== 1) throw new Error('This file is not a Bar by Bar backup.');
+  if (data?.app !== 'bar-by-bar' || !Number.isInteger(data.backupVersion) || data.backupVersion < 1) throw new Error('This file is not a Bar by Bar backup.');
+  if (data.backupVersion > BACKUP_VERSION) throw new Error('This backup is from a newer version of Bar by Bar. Update the app, then restore it.');
+  const playerOf = new Map(data.pieces.map((p) => [p.id, p.playerId]));
+  const attempts = data.attempts.map((a) => withAttemptDefaults(a, (pieceId) => playerOf.get(pieceId)));
   const pages = [];
   for (const { data: url, ...rest } of data.pages) pages.push({ ...rest, blob: await fromDataUrl(url) });
   const recordings = [];
@@ -258,7 +264,7 @@ export async function importAll(file) {
   data.pieces.forEach((v) => tx.objectStore('pieces').put(v));
   pages.forEach((v) => tx.objectStore('pages').put(v));
   data.progress.forEach((v) => tx.objectStore('progress').put(v));
-  data.attempts.forEach((v) => tx.objectStore('attempts').put(v));
+  attempts.forEach((v) => tx.objectStore('attempts').put(v));
   (data.time || []).forEach((v) => tx.objectStore('time').put(v));     // older backups have none
   recordings.forEach((v) => tx.objectStore('recordings').put(v));
   await finished(tx);

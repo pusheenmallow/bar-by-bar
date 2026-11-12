@@ -161,3 +161,97 @@ export async function openTrainer(page, pieceId, barIds, stageId = 'rh', goal = 
   await page.goto(`/#/train/${pieceId}/${[].concat(barIds).join(',')}/${stageId}/${goal}`);
   await expect(page.locator('.answer.clean')).toBeVisible();
 }
+
+/* ---------- backups and whole-database checks ---------- */
+
+// The app's backup, as the object inside the file.
+export async function exportBackup(page) {
+  return page.evaluate(async () => {
+    const store = await import('/js/store.js');
+    await store.attemptsSaved?.();
+    await store.timeSaved();
+    return JSON.parse(await (await store.exportAll()).text());
+  });
+}
+
+// Restores a backup the way a grown-up does: choose the file, confirm, and the app starts again.
+export async function restoreBackup(page, data, { expectToast = null } = {}) {
+  await openGrownUps(page);
+  await page.locator('input[type=file][accept*=json]').setInputFiles({
+    name: 'made-up-backup.json', mimeType: 'application/json',
+    buffer: Buffer.from(typeof data === 'string' ? data : JSON.stringify(data)),
+  });
+  const reloaded = expectToast ? null : page.waitForEvent('load');
+  await page.locator('.scrim:not(.leaving) .sheet').getByRole('button', { name: 'Restore backup' }).tap();
+  if (expectToast) {
+    await expect(page.locator('.toast')).toContainText(expectToast);
+    return;
+  }
+  await reloaded;
+  await expect(page.locator('main')).toBeVisible();
+}
+
+// Leaves the app and deletes its database, as on a tablet that has never run it.
+export async function wipeDatabase(page) {
+  await page.goto('/tests/blank.html');
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase('bar-by-bar');
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error('The database is still open somewhere.'));
+  }));
+}
+
+// Every row of every store in a form that can be compared: sounds and pictures by size and type.
+// Works on any page of the app's origin, and reads the database without the app's code.
+export async function snapshot(page) {
+  return page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open('bar-by-bar');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const plain = (v) => {
+      if (v instanceof Blob) return { blob: v.size, type: v.type };
+      if (ArrayBuffer.isView(v)) return { [v.constructor.name]: Array.from(v) };
+      if (Array.isArray(v)) return v.map(plain);
+      if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, x]) => [k, plain(x)]));
+      return v;
+    };
+    const out = { version: db.version, stores: {} };
+    for (const name of [...db.objectStoreNames].sort()) {
+      const os = db.transaction(name).objectStore(name);
+      const all = await new Promise((resolve, reject) => {
+        const req = os.getAll();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      out.stores[name] = { keyPath: os.keyPath, autoIncrement: os.autoIncrement, indexes: [...os.indexNames].sort(), rows: plain(all) };
+    }
+    db.close();
+    return out;
+  });
+}
+
+export const counts = (snap) => Object.fromEntries(Object.entries(snap.stores).map(([name, s]) => [name, s.rows.length]));
+
+// A short made-up teacher's recording for a piece: two seconds of a plain tone.
+export async function addRecording(page, pieceId) {
+  await page.evaluate(async (pieceId) => {
+    const store = await import('/js/store.js');
+    const model = await import('/js/model.js');
+    const audio = await import('/js/audio.js');
+    const marks = await import('/js/marks.js');
+    const piece = await store.get('pieces', pieceId);
+    const pcm = new Float32Array(audio.RATE * 2);
+    for (let i = 0; i < pcm.length; i++) pcm[i] = 0.4 * Math.sin((2 * Math.PI * 440 * i) / audio.RATE) * (1 - ((i % 6000) / 6000));
+    const info = audio.analyse(pcm);
+    const added = Date.now();
+    await store.put('recordings', {
+      pieceId: store.groupOf(piece), blob: audio.wavBlob(pcm), peaks: info.peaks, onsets: info.onsets, strengths: info.strengths,
+      start: info.start, end: info.end, duration: info.duration, added,
+    });
+    piece.recording = { duration: info.duration, added, marks: marks.freshMarks(model.listBars(piece), info.start, info.end) };
+    await store.savePiece(piece);
+  }, pieceId);
+}

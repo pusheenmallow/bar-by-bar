@@ -149,6 +149,22 @@ export function makeAttempt({
   };
 }
 
+// Fills in what an attempt from before these fields lacks, using only what is known for certain.
+// The rest stays null, meaning "not recorded". `playerOf` gives a piece record's player.
+export function withAttemptDefaults(a, playerOf = () => null) {
+  return {
+    ...a,
+    day: a.day ?? dayKey(a.at),
+    playerId: a.playerId ?? playerOf(a.pieceId) ?? null,
+    source: a.source ?? 'legacy',
+    metronomeOn: a.metronomeOn ?? (a.tempo != null ? true : null),      // a saved tempo meant it was ticking
+    tempoSet: a.tempoSet ?? a.tempo ?? null,
+    firstTryToday: a.firstTryToday ?? null,
+    warmUps: a.warmUps ?? null,
+    runGoal: a.runGoal ?? null,
+  };
+}
+
 export const practiceStages = (piece) => piece.stages.filter((s) => s.pace !== 'nextday');
 export const checkStage = (piece) => piece.stages.find((s) => s.pace === 'nextday') || null;
 

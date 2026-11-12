@@ -1,0 +1,12 @@
+# Private data must never reach this public repo.
+*backup*.json
+private/
+node_modules/
+
+# Photos and scans of scores. Only the app's own icons may be PNGs.
+*.heic
+*.jpg
+*.jpeg
+*.webp
+*.png
+!icons/*.png

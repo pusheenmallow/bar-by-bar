@@ -1,6 +1,6 @@
-import { h, go, icon, crown, closeSheet } from '../ui.js';
+import { h, go, icon, closeSheet } from '../ui.js';
 import {
-  penVar, practiceStages, checkStage, checkStatus, nextForBars, goodRun, MASTERY_RUN, allCrowned, barsLabel,
+  penVar, practiceStages, checkStage, checkStatus, nextForBars, goodRun, MASTERY_RUN, allSolid, barsLabel,
 } from '../model.js';
 import { session } from '../session.js';
 
@@ -20,8 +20,7 @@ export function practicePicker({ piece, bars, progress, stageId = null, back = n
   function status(s) {
     const n = doneCount(s);
     return h('span', { class: 'stage-status' },
-      allCrowned(bars, progress, s) ? h('span', { class: 'pick-crown' }, crown(20, 'Crown')) : null,
-      n === bars.length ? 'Done' : n ? `${n} of ${bars.length} bars` : '');
+      allSolid(bars, progress, s) ? 'Solid' : n === bars.length ? 'Done' : n ? `${n} of ${bars.length} bars` : '');
   }
 
   const stagesEl = h('div', { class: 'stages pick-list', role: 'group', 'aria-label': QUESTION });
@@ -57,17 +56,16 @@ export function practicePicker({ piece, bars, progress, stageId = null, back = n
     const row = checkRow();
     if (row) stagesEl.append(row);
 
-    const option = (n, name, art) => h('button', {
+    const option = (n, name) => h('button', {
       class: `goal-option ${goal === n ? 'chosen' : ''}`,
       'aria-pressed': String(goal === n),
       onClick: () => { goal = n; session.runGoal = n; draw(); },
     },
     h('span', { class: 'goal-number' }, n),
-    h('span', { class: 'goal-name' }, name),
-    art);
-    goalEl.replaceChildren(option(good, 'Good'), option(MASTERY_RUN, 'Mastery', crown(24)));
+    h('span', { class: 'goal-name' }, name));
+    goalEl.replaceChildren(option(good, 'Good'), option(MASTERY_RUN, 'Solid'));
     sayEl.textContent = goal === MASTERY_RUN
-      ? `${MASTERY_RUN} clean in a row wins a crown.`
+      ? `${MASTERY_RUN} clean in a row makes it solid.`
       : `${good} clean in a row colours it in.`;
   }
   draw();

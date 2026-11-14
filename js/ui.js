@@ -237,14 +237,7 @@ const crownShape = () => [
   ...[[19, 35], [50, 26], [81, 35]].map(([cx, cy]) => h('svg:circle', { cx, cy, r: 4.5 })),
 ];
 
-// A plain little crown, in the colour of the text around it.
+// The gold crown. It is drawn on the score only, on a bar that was still clean on a later day.
 export function crown(size = 18, label) {
   return h('svg:svg', { viewBox: '12 18 76 64', width: size, height: size * 0.84, class: 'crown-art', role: label ? 'img' : null, 'aria-label': label || null, 'aria-hidden': label ? null : 'true' }, crownShape());
-}
-
-// The same crown on a gold sticker, for the end of a run.
-export function crownSticker(size = 72, label) {
-  return h('svg:svg', { viewBox: '0 0 100 100', width: size, height: size, class: 'sticker-art', role: label ? 'img' : null, 'aria-label': label || null, 'aria-hidden': label ? null : 'true' },
-    h('svg:circle', { cx: 50, cy: 50, r: 48, class: 'sticker-disc' }),
-    h('svg:g', { class: 'sticker-star' }, crownShape()));
 }

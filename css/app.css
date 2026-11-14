@@ -35,7 +35,8 @@
   --wash-peach: #F6E3D5; --mark-peach: #CC946E;
   --wash-mint: #D8EFE7;  --mark-mint: #63A892;
   --heat-1: #F6F0E2; --heat-2: #ECDDBD; --heat-3: #DFC692; --heat-4: #CFAB64;
-  --chip-crown: #8A6A2E;
+  --chip-crown: #A9781A;
+  --wash-started: #EDEDE8;
 }
 /* The app draws its own themes, so a browser's forced dark mode must leave it alone. */
 :root[data-theme='light'] { color-scheme: only light; }
@@ -219,8 +220,16 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 }
 .bar-hit .marks { position: absolute; right: 3px; top: 2px; display: flex; gap: 3px; align-items: center; }
 .mark { display: inline-flex; background: var(--chip); border-radius: 5px; padding: 2px; color: var(--chip-ink); }
-.mark.star { background: none; padding: 0; }
-.mark.crown { align-items: center; gap: 1px; padding: 1px 3px; color: var(--chip-crown); font-size: .68rem; font-weight: 500; line-height: 1; }
+.mark.crown { align-items: center; padding: 2px 3px; color: var(--chip-crown); }
+/* A bar's first gold crown catches the light for a second. After that it is simply there. */
+.mark.crown.shimmer { animation: shimmer 1s ease-in-out 1; }
+@keyframes shimmer {
+  0%, 100% { filter: none; }
+  30% { filter: brightness(1.6) drop-shadow(0 0 5px var(--gold)); }
+  60% { filter: brightness(1.15); }
+  80% { filter: brightness(1.45) drop-shadow(0 0 3px var(--gold)); }
+}
+@media (prefers-reduced-motion: reduce) { .mark.crown.shimmer { animation: none; } }
 .crown-art { display: block; flex: none; fill: currentColor; }
 .mark.slipped {
   width: 20px; height: 20px; align-items: center; justify-content: center; padding: 0;
@@ -258,7 +267,6 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 .tray-swatch { display: block; width: 26px; height: 3px; margin-bottom: 3px; }
 .tray-name { font-size: .76rem; line-height: 1.2; }
 .tray-count { font-size: .72rem; color: var(--ink-2); }
-.tray-crowns { display: inline-flex; align-items: center; gap: 2px; margin-left: 7px; color: var(--brass-text); }
 .time-key { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 4px 0; }
 .time-key i { width: 30px; height: 14px; border-radius: 3px; }
 .time-key .tray-name { font-size: .92rem; margin-right: 12px; }
@@ -350,7 +358,6 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 .stage-name { flex: 1; }
 .stage-status { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: .8rem; }
 .stage-row.resting .stage-name { color: var(--ink-2); }
-.pick-crown { color: var(--brass-text); }
 .pick-title { flex: 1; min-width: 0; margin: 0 12px; }
 .pick-title p { color: var(--ink-2); font-size: .85rem; }
 .pick-list .stage-row { min-height: 54px; }
@@ -360,16 +367,15 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
   display: flex; align-items: center; gap: 10px; min-height: 68px; padding: 8px 16px; text-align: left;
   background: none; border: 1px solid var(--line); border-radius: var(--r);
 }
-.goal-option .crown-art { margin-left: auto; color: var(--brass-text); }
 .goal-option.chosen { background: var(--raised); border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
 .goal-number { font-size: 1.7rem; font-weight: 300; line-height: 1; }
 .goal-name { font-weight: 450; }
 .pick-say { color: var(--ink-2); font-size: .9rem; }
-.crown-toggle {
-  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0;
-  background: none; border: 0; color: var(--line);
+.solid-toggle {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 58px; height: 36px; padding: 0 10px;
+  background: none; border: 1px solid var(--line); border-radius: 18px; color: var(--ink-2); font-size: .8rem;
 }
-.crown-toggle.on { color: var(--brass-text); }
+.solid-toggle.on { border-color: var(--brass); color: var(--brass-text); box-shadow: inset 0 0 0 1px var(--brass); }
 .swatch { flex: none; width: 10px; height: 10px; border-radius: 50%; }
 .tick { width: 24px; height: 24px; accent-color: var(--brass); }
 .toggle { display: flex; align-items: center; gap: 12px; min-height: 46px; }
@@ -482,7 +488,6 @@ audio.clip { display: none; }
 .slots.long { --slot: min(52px, calc((100vw - var(--pad) * 2 - 48px) / 7)); gap: 6px; }
 .slot { position: relative; flex: none; width: var(--slot); height: var(--slot); border: 1px solid var(--line); border-radius: 50%; }
 .slot.after-good { margin-left: 6px; }
-.ghost { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--line); }
 .sticker { position: absolute; inset: -1px; display: block; }
 .slot .sticker-art { width: 100%; height: 100%; }
 .sticker.slap { animation: slap .22s ease-out; }
@@ -500,8 +505,6 @@ audio.clip { display: none; }
 }
 .answer.clean { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .cheer { display: flex; justify-content: center; animation: slap .3s ease-out; }
-.cheer.crowned { animation: crown-drop .5s cubic-bezier(.2, 1.3, .4, 1); }
-@keyframes crown-drop { from { transform: translateY(-40px) scale(.7); opacity: 0; } to { transform: none; opacity: 1; } }
 
 .finish { min-height: 100dvh; justify-content: center; align-items: center; }
 .finish-body { display: flex; flex-direction: column; align-items: center; gap: 14px; }

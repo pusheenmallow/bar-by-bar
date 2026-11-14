@@ -207,8 +207,25 @@ export function topStage(piece, prog) {
   return top;
 }
 
-export const crownStages = (piece, prog) => practiceStages(piece).filter((s) => prog?.crowns?.[s.id]);
-export const allCrowned = (bars, progress, stage) => bars.every((b) => progress.get(b.id)?.crowns?.[stage.id]);
+// A stage is "solid" on a bar once the long run was won there. The field is still called `crowns`,
+// from when that earned a crown, so nothing saved under the old rules is lost: it shows as solid.
+export const solidStages = (piece, prog) => practiceStages(piece).filter((s) => prog?.crowns?.[s.id]);
+export const allSolid = (bars, progress, stage) => bars.every((b) => progress.get(b.id)?.crowns?.[stage.id]);
+
+// The only crown is gold: the bar was still clean on a later day.
+export function hasGold(piece, prog) {
+  const check = checkStage(piece);
+  return !!(check && prog?.done?.[check.id]);
+}
+
+// How far a bar has come, as one of five colour steps: none, started, good, solid, gold.
+export function barStep(piece, prog) {
+  if (!prog) return 'none';
+  if (hasGold(piece, prog)) return 'gold';
+  const top = topStage(piece, prog);
+  if (!top) return prog.clean || prog.slips ? 'started' : 'none';
+  return prog.crowns?.[top.id] ? 'solid' : 'good';
+}
 
 export function waitingForCheck(piece, bar, prog, now = Date.now()) {
   const check = checkStage(piece);

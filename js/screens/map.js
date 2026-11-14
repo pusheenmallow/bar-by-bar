@@ -1,8 +1,8 @@
 import { h, go, fill, icon, sticker, crown, sheet, closeSheet, replaceSheet } from '../ui.js';
 import { get, put, progressMap, timeDocs, dayTotal, timeSaved } from '../store.js';
 import {
-  penVar, listBars, playableBars, blankProgress, checkStage, checkStatus, waitingForCheck, checkGroups, topStage,
-  crownStages, barsLabel, dayKey, newId, goalSeconds, timeText, clockText, numberRanges,
+  penVar, listBars, playableBars, blankProgress, checkStatus, waitingForCheck, checkGroups, topStage,
+  solidStages, hasGold, barStep, barsLabel, dayKey, newId, goalSeconds, timeText, clockText, numberRanges,
 } from '../model.js';
 import { drawBars } from '../images.js';
 import { cssVar } from '../theme.js';
@@ -67,15 +67,29 @@ export async function mapScreen([id], ctx, grownUp = false) {
         continue;
       }
       const prog = progress.get(bar.id);
+      const step = barStep(piece, prog);
+      if (step === 'none') continue;
+      if (step === 'started') {                 // tried, with no stage finished yet
+        c.fillStyle = cssVar('--wash-started');
+        c.fillRect(x0, y0, x1 - x0, y1 - y0);
+        continue;
+      }
       const top = topStage(piece, prog);
-      if (!top) continue;
 
-      // A soft wash in the furthest stage's colour, and a thin line of stages along the bottom.
+      // A soft wash in the furthest stage's colour, deeper once that stage is solid,
+      // and a thin line of stages along the bottom. A solid stage has a thicker line.
       c.fillStyle = cssVar(`--wash-${top.pen}`);
       c.fillRect(x0, y0, x1 - x0, y1 - y0);
-      const inset = 5, gap = 2, tall = 3;
+      if (step === 'solid') {
+        c.globalAlpha = 0.3;
+        c.fillStyle = cssVar(`--mark-${top.pen}`);
+        c.fillRect(x0, y0, x1 - x0, y1 - y0);
+        c.globalAlpha = 1;
+      }
+      const inset = 5, gap = 2;
       const each = (x1 - x0 - inset * 2 - gap * (piece.stages.length - 1)) / piece.stages.length;
       piece.stages.forEach((st, i) => {
+        const tall = prog.crowns?.[st.id] ? 7 : 3;
         c.fillStyle = prog.done[st.id] ? cssVar(`--mark-${st.pen}`) : cssVar('--mark-empty');
         c.fillRect(x0 + inset + i * (each + gap), y1 - tall - 3, each, tall);
       });
@@ -88,14 +102,16 @@ export async function mapScreen([id], ctx, grownUp = false) {
       const prog = progress.get(bar.id);
       const reached = topStage(piece, prog);
       const waiting = waitingForCheck(piece, bar, prog);
-      const checked = checkStage(piece) && prog?.done[checkStage(piece).id];
+      const gold = hasGold(piece, prog);
+      const fresh = gold && session.freshGold.has(`${id}|${bar.id}`);
       const seconds = barTime.get(bar.id) || 0;
       const inStages = viewing === 'stages';
-      const crowns = crownStages(piece, prog);
+      const solid = solidStages(piece, prog);
       const label = [
         `Bar ${bar.n}`,
         bar.skip ? 'skipped' : reached ? `reached ${reached.name}` : 'not started',
-        crowns.length ? `crown for ${crowns.map((s) => s.name).join(' and ')}` : '',
+        solid.length ? `solid for ${solid.map((s) => s.name).join(' and ')}` : '',
+        gold ? 'gold crown' : '',
         seconds ? `${timeText(seconds)} practised` : '',
         prog?.flagged ? 'tough bar' : '',
         prog?.runSlip ? 'slipped in the last whole-piece play' : '',
@@ -105,6 +121,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
       return h('button', {
         class: `bar-hit ${bar.skip ? 'skipped' : ''} ${waiting && inStages ? 'waiting' : ''} ${firstPick?.id === bar.id ? 'picked' : ''}`,
         'aria-label': label,
+        'data-step': bar.skip ? null : barStep(piece, prog),
         disabled: bar.skip && !parent,
         style: hitPlace(bar, view),
         onClick: () => onBar(bar),
@@ -112,16 +129,14 @@ export async function mapScreen([id], ctx, grownUp = false) {
       h('span', { class: 'num' }, bar.n),
       !inStages && busiest.includes(bar.id) && seconds ? h('span', { class: 'bar-time' }, clockText(seconds)) : null,
       inStages && h('span', { class: 'marks' },
-        crowns.length ? h('span', { class: 'mark crown' }, crown(18), crowns.length > 1 ? crowns.length : null) : null,
         prog?.runSlip ? h('span', { class: 'mark slipped', title: 'Slipped in the whole piece' }, '!') : null,
         prog?.flagged && h('span', { class: 'mark flag' }, icon('flag', 18)),
         prog?.notes.length ? h('span', { class: 'mark note' }, icon('note', 18)) : null,
-        checked && h('span', { class: 'mark star' }, sticker(20))));
+        gold && h('span', { class: `mark crown ${fresh ? 'shimmer' : ''}` }, crown(20))));
     }));
   }
 
   const counts = () => piece.stages.map((s) => playable.filter((b) => progress.get(b.id)?.done[s.id]).length);
-  const crownCounts = () => piece.stages.map((s) => playable.filter((b) => progress.get(b.id)?.crowns?.[s.id]).length);
 
   const trayEl = h('footer', { class: 'tray' });
   function tray() {
@@ -135,13 +150,11 @@ export async function mapScreen([id], ctx, grownUp = false) {
       return;
     }
     const c = counts();
-    const won = crownCounts();
     trayEl.replaceChildren(...piece.stages.map((s, i) => h(parent ? 'button' : 'div', {
       class: `tray-pen ${painting === s.id ? 'active' : ''}`,
       'aria-pressed': parent ? String(painting === s.id) : null,
       onClick: parent ? () => { painting = painting === s.id ? null : s.id; tray(); hint(); } : null,
-    }, h('i', { class: 'tray-swatch', style: { background: penVar(s.pen) } }), h('span', { class: 'tray-name' }, s.name), h('span', { class: 'tray-count' }, `${c[i]} of ${playable.length}`,
-        won[i] ? h('span', { class: 'tray-crowns', 'aria-label': `${won[i]} ${won[i] === 1 ? 'crown' : 'crowns'}` }, crown(13), won[i]) : null))));
+    }, h('i', { class: 'tray-swatch', style: { background: penVar(s.pen) } }), h('span', { class: 'tray-name' }, s.name), h('span', { class: 'tray-count' }, `${c[i]} of ${playable.length}`))));
   }
 
   /* ---------- how to practise ---------- */
@@ -284,8 +297,8 @@ export async function mapScreen([id], ctx, grownUp = false) {
         h('span', { class: 'stage-name' }, s.name),
         h('span', { class: 'stage-status' }, isCheck && !p.done[s.id] ? checkStatus(piece, bar, progress.get(bar.id)) : ''),
         !isCheck && h('button', {
-          class: `crown-toggle ${p.crowns?.[s.id] ? 'on' : ''}`,
-          'aria-label': `Crown for ${s.name} on this bar`,
+          class: `solid-toggle ${p.crowns?.[s.id] ? 'on' : ''}`,
+          'aria-label': `Solid for ${s.name} on this bar`,
           'aria-pressed': String(!!p.crowns?.[s.id]),
           onClick: () => update((next) => {
             if (next.crowns[s.id]) delete next.crowns[s.id];
@@ -294,7 +307,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
               next.done[s.id] ||= Date.now();
             }
           }),
-        }, crown(22)),
+        }, 'Solid'),
         h('input', {
           type: 'checkbox',
           class: 'tick',
@@ -388,6 +401,8 @@ export async function mapScreen([id], ctx, grownUp = false) {
   ctx.onShow(() => {
     views.forEach((v) => ro.observe(v.box));
     refresh();
+    // A first gold crown shimmers once, on this showing of the score only.
+    for (const key of [...session.freshGold]) if (key.startsWith(`${id}|`)) session.freshGold.delete(key);
     window.addEventListener('themechange', redraw);
   });
   ctx.onLeave(() => {

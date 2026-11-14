@@ -167,7 +167,7 @@ export async function settings([id], ctx) {
       h('div', { class: 'two' },
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Clean in a row'),
           stepper({ label: 'Clean in a row', value: goodRun(piece), min: 2, max: MASTERY_RUN - 1, onChange: (v) => { piece.cleanTarget = v; save(); } }),
-          h('span', { class: 'field-hint' }, `This colours a bar in. ${MASTERY_RUN} in a row wins a crown.`)),
+          h('span', { class: 'field-hint' }, `This colours a bar in. ${MASTERY_RUN} in a row makes it solid.`)),
         h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Slow speed'),
           stepper({ label: 'Slow speed as a share of full speed', value: piece.slowPercent, min: 40, max: 90, step: 5, format: (v) => `${v}%`, onChange: (v) => { piece.slowPercent = v; save(); } }))),
       field('Key signature', h('select', { onChange: (e) => { piece.keySig = e.target.value; save(); } },

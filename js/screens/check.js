@@ -1,5 +1,6 @@
 import { h, goUp, softly, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
 import { get, put, progressMap, addAttempt } from '../store.js';
+import { session } from '../session.js';
 import { checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress } from '../model.js';
 import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
@@ -38,6 +39,7 @@ export async function check([id], ctx) {
   const save = async (bar, ok) => {
     const p = progress.get(bar.id) || blankProgress(id, bar.id);
     p.lastCheck = dayKey(Date.now());
+    if (ok && !p.done[stage.id]) session.freshGold.add(`${id}|${bar.id}`);       // its first gold crown
     if (ok) p.done[stage.id] = Date.now();
     await put('progress', p);
     progress.set(bar.id, p);
@@ -106,6 +108,7 @@ export async function check([id], ctx) {
     softly(() => { root.className = 'screen finish'; root.replaceChildren(h('div', { class: 'finish-body' },
       h('div', { class: 'cheer' }, sticker(76)),
       h('h1', { class: 'center' }, passed === 1 ? '1 bar stuck' : `${passed} bars stuck`),
+      passed ? h('p', { class: 'center lead' }, `${passed === 1 ? 'It has' : 'They have'} a gold crown on your piece now.`) : null,
       again.length ? h('p', { class: 'center lead' }, `${again.length === 1 ? `Bar ${again[0].n} needs` : `Bars ${again.map((b) => b.n).join(', ')} need`} a bit more. Try again tomorrow.`) : null,
       h('div', { class: 'row-buttons narrow' },
         again.length ? h('button', {

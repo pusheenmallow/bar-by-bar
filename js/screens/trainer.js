@@ -1,13 +1,13 @@
-import { h, fill, goUp, swapTo, icon, sheet, closeSheet, sticker, crown, crownSticker, toast } from '../ui.js';
+import { h, fill, goUp, swapTo, icon, sheet, closeSheet, sticker, toast } from '../ui.js';
 import { get, put, progressMap, byIndex, addAttempt } from '../store.js';
 import {
   penVar, listBars, barsLabel, blankProgress, mistakeList, rankMistakes, nextForBars, startTempo, clampTempo, easierTempo, fasterTempo,
-  freshRun, afterClean, afterSlip, stageNeedsSpeed, goodRun, MASTERY_RUN, allCrowned,
+  freshRun, afterClean, afterSlip, stageNeedsSpeed, goodRun, MASTERY_RUN, allSolid,
 } from '../model.js';
 import { drawBars } from '../images.js';
 import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
-import { stickOn, peelOff, fanfare, crownFanfare } from '../sound.js';
+import { stickOn, peelOff, fanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
 import { missing, speedControl, backTo } from './common.js';
 import { Hearing } from '../hear.js';
@@ -110,21 +110,19 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   const slots = h('div', { class: 'slots', role: 'img' });
   const runLabel = h('p', { class: 'run-label' });
   function showTokens(change) {
-    const forCrown = target >= MASTERY_RUN;
+    const forSolid = target >= MASTERY_RUN;
     slots.setAttribute('aria-label', `${run.tokens} of ${target} clean in a row`);
-    slots.classList.toggle('long', forCrown);
-    runLabel.textContent = `${target} clean in a row${forCrown ? ' for the crown' : ''}`;
+    slots.classList.toggle('long', forSolid);
+    runLabel.textContent = `${target} clean in a row${forSolid ? ' to make it solid' : ''}`;
     while (slots.children.length < target) slots.append(h('span', { class: 'slot' }));
     [...slots.children].forEach((slot, i) => {
-      const crownSlot = forCrown && i === target - 1;
-      slot.classList.toggle('after-good', forCrown && i === good);
-      if (crownSlot && !slot.querySelector('.ghost')) slot.append(h('span', { class: 'ghost' }, crown(30)));
+      slot.classList.toggle('after-good', forSolid && i === good);
       const filled = i < run.tokens;
       const peeling = slot.querySelector('.sticker.peel');
       if (filled && peeling) peeling.remove();        // a clean play straight after a slip: the old sticker makes way now
       const has = !!slot.querySelector('.sticker');
       if (filled && !has) {
-        slot.append(h('span', { class: `sticker ${change === 'clean' ? 'slap' : ''}` }, crownSlot ? crownSticker(52) : sticker(52)));
+        slot.append(h('span', { class: `sticker ${change === 'clean' ? 'slap' : ''}` }, sticker(52)));
       } else if (!filled && has) {
         const s = slot.querySelector('.sticker');
         s.classList.add('peel');
@@ -188,12 +186,12 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     else if (passedGood) await colourIn();
   }
 
-  // A good run on the way to the crown still counts, even if the crown doesn't come today.
+  // A good run on the way to solid still counts, even if solid doesn't come today.
   async function colourIn() {
     const fresh = bars.some((b) => !progress.get(b.id)?.done[stage.id]);
     await settle();
     await mark();
-    if (fresh) toast(`${barsLabel(bars)} coloured in. Keep going for the crown.`);
+    if (fresh) toast(`${barsLabel(bars)} coloured in. Keep going to make it solid.`);
   }
 
   async function settle() {
@@ -204,12 +202,12 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     }
   }
 
-  async function mark(crowned = false) {
+  async function mark(solid = false) {
     const now = Date.now();
     for (const b of bars) {
       const p = progress.get(b.id) || blankProgress(id, b.id);
       if (!p.done[stage.id]) p.done[stage.id] = now;
-      if (crowned) {
+      if (solid) {                              // saved as `crowns`: see solidStages in model.js
         p.crowns ||= {};
         p.crowns[stage.id] ||= now;
       }
@@ -224,7 +222,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
       const up = fasterTempo(tempo, piece.tempo);
       sheet([
         h('h2', {}, `${run.tokens} clean at ${tempo}`),
-        h('p', {}, `${target >= MASTERY_RUN ? 'The crown is' : 'The goal is'} at full speed, ${piece.tempo}. Try the next step up.`),
+        h('p', {}, `${target >= MASTERY_RUN ? 'Solid is' : 'The goal is'} at full speed, ${piece.tempo}. Try the next step up.`),
         h('div', { class: 'row-buttons' },
           h('button', { class: 'btn', onClick: () => { closeSheet(); leave(); } }, 'Stop here'),
           h('button', {
@@ -242,18 +240,18 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     met.stop();
     const mastered = target >= MASTERY_RUN;
     const wasDone = bars.every((b) => progress.get(b.id)?.done[stage.id]);
-    const wasCrowned = allCrowned(bars, progress, stage);
+    const wasSolid = allSolid(bars, progress, stage);
     await mark(mastered);
-    if (mastered) crownFanfare(); else fanfare();
+    fanfare();
     await swipe();
 
     const label = barsLabel(bars);
     const one = bars.length === 1;
     const next = nextForBars(piece, bars, progress);
     const more = MASTERY_RUN - run.tokens;
-    const canGoOn = !mastered && !wasCrowned;
+    const canGoOn = !mastered && !wasSolid;
 
-    const goForCrown = () => {
+    const goForSolid = () => {
       closeSheet();
       target = MASTERY_RUN;
       ending = false;
@@ -264,10 +262,10 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
 
     let title, line;
     if (mastered) {
-      title = wasCrowned ? 'Mastered again!' : 'Mastered!';
-      line = wasCrowned
+      title = wasSolid ? 'Still solid!' : 'Solid!';
+      line = wasSolid
         ? `${stage.name}, ${target} clean in a row.`
-        : `${stage.name}, ${target} clean in a row. ${label} ${one ? 'gets a crown' : 'get crowns'}.`;
+        : `${stage.name}, ${target} clean in a row. ${label} ${one ? 'is' : 'are'} solid now.`;
     } else if (wasDone) {
       title = 'Still got it!';
       line = `${stage.name}, ${target} clean in a row.`;
@@ -277,12 +275,12 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     }
 
     sheet([
-      h('div', { class: `cheer ${mastered ? 'crowned' : ''}` }, mastered ? crownSticker(104) : sticker(76)),
+      h('div', { class: 'cheer' }, sticker(mastered ? 92 : 76)),
       h('h2', { class: 'center' }, title),
       h('p', { class: 'center' }, line),
       h('div', { class: 'row-buttons narrow' },
         h('button', { class: `btn ${next || canGoOn ? '' : 'primary'}`, onClick: () => { closeSheet(); leave(); } }, 'Back to my piece'),
-        canGoOn && h('button', { class: `btn ${next ? '' : 'primary'}`, onClick: goForCrown }, crown(22), `${more} more for the crown`),
+        canGoOn && h('button', { class: `btn ${next ? '' : 'primary'}`, onClick: goForSolid }, `${more} more to make it solid`),
         next && h('button', {
           class: 'btn primary',
           onClick: () => { closeSheet(); swapTo(`/train/${id}/${bars.map((b) => b.id).join(',')}/${next.id}/${chosenGoal}`); },

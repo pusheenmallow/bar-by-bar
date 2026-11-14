@@ -33,8 +33,3 @@ export function fanfare() {
   if (muted) return;
   [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => note(f, i * 0.09, 0.42, 0.24, 'triangle'));
 }
-export function crownFanfare() {
-  if (muted) return;
-  [523.25, 659.25, 783.99, 1046.5, 1318.51].forEach((f, i) => note(f, i * 0.1, 0.4, 0.22, 'triangle'));
-  [1046.5, 1318.51, 1567.98].forEach((f) => note(f, 0.56, 0.9, 0.18, 'triangle'));
-}

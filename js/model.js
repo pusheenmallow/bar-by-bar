@@ -414,7 +414,6 @@ export const withFirst = (order, first) => (order.includes(first) ? [first, ...o
 // that fill. Missed days are not shown at all, and every Monday starts clean.
 
 export const DAY_SECONDS = 5 * 60;
-export const QUICK_SECONDS = 5 * 60;          // a Quick practice is exactly enough to tick the day
 export const DEFAULT_WEEK_TARGET = 4;
 export const RETURN_AFTER_DAYS = 3;           // this many days away makes the first session back a short one
 export const RETURN_STOPS = 4;
@@ -466,16 +465,102 @@ export function warmUpBar(piece, progress, checking) {
     || null;
 }
 
-// Where a Quick practice starts on a piece: what is waiting, then what slipped, then what comes next.
-export function quickPath(piece, progress, now = Date.now(), schedule = new Map()) {
-  if (checkStage(piece) && checkGroups(piece, progress, now, 4, schedule).length) return `/check/${piece.id}`;
+/* ---------- today's practice ---------- */
+// A session is a short queue of stops: checks first (with a warm-up), then one or two new bars,
+// the join between the new bar and the one before, and one play-through to finish.
+//  - The assignment sets which bars are new and how far to take them. The schedule sets the checks.
+//  - A Quick practice is checks only, four at most. With nothing to check it is one new bar.
+//  - Back after a few days away, the session is a warm-up and up to four checks, with nothing new.
+// Each stop names the screen that runs it, and how many stops it counts as.
+
+export const NEW_PER_SESSION = 2;
+
+export function sessionPlan({ piece, progress, schedule = new Map(), assignment = null, now = Date.now(), back = false, quick = false }) {
+  const current = assignment?.status === 'current' ? assignment : null;
+  const pinned = activePins(piece, current, now);
   const bars = playableBars(piece);
-  const unfinished = (b) => nextForBars(piece, [b], progress);
-  const bar = bars.find((b) => progress.get(b.id)?.runSlip)
-    || bars.find((b) => progress.get(b.id)?.flagged && unfinished(b))
-    || bars.find(unfinished);
-  const stage = bar && (unfinished(bar) || practiceStages(piece).at(-1));
-  return bar && stage ? `/train/${piece.id}/${bar.id}/${stage.id}/${goodRun(piece)}` : `/whole/${piece.id}`;
+  const stages = practiceStages(piece);
+  const short = back || quick;
+  const reviewCap = short ? RETURN_STOPS : REVIEW_CAP;
+  const groups = checkStage(piece) ? reviewGroups(piece, progress, schedule, { now, pinned, cap: reviewCap }) : [];
+  const warm = !quick && groups.length ? !!warmUpBar(piece, progress, groups) : false;
+  const stops = [];
+  const lower = (list) => barsLabel(list).toLowerCase();
+  if (groups.length) {
+    const n = groups.length;
+    stops.push({ kind: 'review', size: n + (warm ? 1 : 0), label: `${n} ${n === 1 ? 'check' : 'checks'}`, path: `/check/${piece.id}` });
+  }
+
+  // New bars: the assigned ones, taken as far as the assignment says. A pinned bar that is
+  // still being learned goes first, and is taken all the way.
+  const target = stages.find((s) => s.id === current?.stageId) || stages.at(-1);
+  const upTo = stages.slice(0, stages.indexOf(target) + 1);
+  const learning = (b) => !scheduleOf(piece, b, progress.get(b.id), schedule.get(b.id));
+  const stageFor = (b) => ((pinned.has(b.id) && learning(b) ? stages : upTo).find((s) => !progress.get(b.id)?.done[s.id]) || null);
+  const pool = assignedBars(piece, current);
+  const first = bars.filter((b) => pinned.has(b.id) && learning(b));
+  const fresh = [...first, ...(pool.length ? pool : bars).filter((b) => !first.includes(b))].filter(stageFor);
+  const train = (list, stage) => `/train/${piece.id}/${list.map((b) => b.id).join(',')}/${stage.id}/${goodRun(piece)}`;
+  const addNew = (b) => stops.push({ kind: 'new', size: 1, bars: [b], label: `${lower([b])}, ${stageFor(b).name.toLowerCase()}`, path: train([b], stageFor(b)) });
+
+  const news = back || (quick && groups.length) ? [] : fresh.slice(0, quick ? 1 : NEW_PER_SESSION);
+  news.forEach(addNew);
+  if (!short && news.length) {
+    const before = bars[bars.indexOf(news[0]) - 1];
+    if (before && topStage(piece, progress.get(before.id))) {
+      const pair = [before, news[0]];
+      stops.push({ kind: 'join', size: 1, bars: pair, label: `${lower(pair)} together`, path: train(pair, stageFor(news[0])) });
+    }
+  }
+
+  // The play-through: the whole piece, or as far as it has been learned.
+  const runStop = () => {
+    const started = bars.filter((b) => topStage(piece, progress.get(b.id)) || news.includes(b));
+    if (started.length < 2) return null;
+    const span = bars.slice(0, bars.indexOf(started.at(-1)) + 1);
+    const whole = span.length === bars.length;
+    return {
+      kind: 'run', size: 1, label: whole ? 'the whole piece' : `${lower(span)}, all the way through`,
+      path: whole ? `/whole/${piece.id}` : `/whole/${piece.id}/${span[0].n}/${span.at(-1).n}`,
+    };
+  };
+  if (!short) { const run = runStop(); if (run) stops.push(run); }
+
+  // A short session with nothing to check still has one thing in it.
+  if (!stops.length) {
+    const run = runStop();
+    if (back && run) stops.push(run);
+    else if (fresh.length) addNew(fresh[0]);
+    else if (run) stops.push(run);
+  }
+  return {
+    stops, total: stops.reduce((sum, s) => sum + s.size, 0), reviewCap, warm,
+    minutes: current?.minutes || DEFAULT_SESSION_MINUTES, note: current?.note?.trim() || '',
+  };
+}
+
+// One sentence for the end of a session, about what the player did and not about them. It is
+// drawn from today's plays on the piece: slowing down that worked, going back to a bar until it
+// was clean, or bars that were still there on the first try.
+export function processSentence(piece, attempts, { finished = true } = {}) {
+  const numbers = new Map(listBars(piece).map((b) => [b.id, b.n]));
+  const name = (ids, { start = false } = {}) => {
+    const text = barsLabel(ids.map((id) => ({ n: numbers.get(id) })).filter((b) => b.n).sort((a, b) => a.n - b.n));
+    return start ? text : text.toLowerCase();
+  };
+  const plays = attempts.filter((a) => a.source === 'trainer' && a.barIds.every((id) => numbers.has(id))).sort((a, b) => a.at - b.at);
+  const same = (a, b) => a.barIds.join() === b.barIds.join();
+  const cleans = plays.filter((a) => a.result === 'clean');
+  for (const c of cleans) {
+    const faster = plays.find((s) => s.result === 'slip' && s.at <= c.at && same(s, c) && s.metronomeOn && c.metronomeOn && s.tempoSet > c.tempoSet);
+    if (faster) return `Slower worked on ${name(c.barIds)}: clean at ${c.tempoSet}.`;
+  }
+  for (const c of cleans) {
+    if (plays.some((s) => s.result === 'slip' && s.at <= c.at && same(s, c))) return `You went back to ${name(c.barIds)}, and then it was clean.`;
+  }
+  const kept = [...new Set(attempts.filter((a) => a.source === 'check' && a.result === 'clean').flatMap((a) => a.barIds))].filter((id) => numbers.has(id));
+  if (kept.length) return `${name(kept, { start: true })} ${kept.length === 1 ? 'was' : 'were'} still clean on the first try.`;
+  return finished ? 'You did every stop today.' : 'You turned up and practised today.';
 }
 
 /* ---------- practice time ---------- */

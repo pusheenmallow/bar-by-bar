@@ -1,22 +1,27 @@
 import { h, goUp, icon, sticker, sheet, toast, softly } from '../ui.js';
 import { get, put, progressMap, scheduleMap, addAttempt } from '../store.js';
 import {
-  listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges, scheduleOf, afterRunSlip, dayKey,
+  listBars, playableBars, barsLabel, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges, scheduleOf, afterRunSlip, dayKey,
 } from '../model.js';
 import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { fanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
-import { missing, speedControl, backTo } from './common.js';
+import { missing, speedControl, backTo, sessionHome } from './common.js';
 import { scorePages, layer, hitPlace } from './score.js';
 import { practicePicker } from './pick.js';
 
-export async function whole([id], ctx) {
+// `from` and `to` are bar numbers, for a play-through of only the part learned so far.
+export async function whole([id, from, to], ctx) {
   const piece = await get('pieces', id);
   if (!piece) return missing('That piece has gone.');
+  const home = sessionHome(id);
   const progress = await progressMap(id);
   const bars = listBars(piece);
-  const playable = playableBars(piece);
+  const everyBar = playableBars(piece);
+  const playable = from ? everyBar.filter((b) => b.n >= Number(from) && b.n <= Number(to)) : everyBar;
+  const part = playable.length < everyBar.length;
+  const inPlay = new Set(playable.map((b) => b.id));
   if (!playable.length) return missing('This piece has no bars to play.');
 
   const clock = await new PracticeClock({ piece, bars: playable, mode: 'piece', limit: runLimit(piece, playable.length), keepOverLimit: true }).load();
@@ -40,7 +45,7 @@ export async function whole([id], ctx) {
     const { c, px } = pad;
     for (const bar of view.bars) {
       const { x0, x1, y0, y1 } = px(bar);
-      if (bar.skip) {
+      if (bar.skip || !inPlay.has(bar.id)) {
         c.fillStyle = cssVar('--skip');
         c.fillRect(x0, y0, x1 - x0, y1 - y0);
       } else if (slipped.has(bar.id)) {
@@ -53,7 +58,7 @@ export async function whole([id], ctx) {
   function chips(view) {
     view.hits.replaceChildren(...view.bars.map((bar) => h('button', {
       class: `bar-hit ${bar.skip ? 'skipped' : ''}`,
-      disabled: bar.skip || state === 'ready',
+      disabled: bar.skip || !inPlay.has(bar.id) || state === 'ready',
       'aria-label': `Bar ${bar.n}${slipped.has(bar.id) ? ', marked as slipped' : ''}`,
       'aria-pressed': String(slipped.has(bar.id)),
       style: hitPlace(bar, view),
@@ -179,7 +184,7 @@ export async function whole([id], ctx) {
       list.length ? h('div', { class: 'row-buttons narrow' }, list.slice(0, 4).map(practiseLink)) : null,
       h('div', { class: 'row-buttons narrow' },
         h('button', { class: 'btn', onClick: () => ctx.rerender() }, 'Play it again'),
-        h('button', { class: 'btn primary', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece')))); }, () => root);
+        h('button', { class: 'btn primary', onClick: () => goUp(home.path) }, home.done)))); }, () => root);
   }
 
   const ro = new ResizeObserver(() => views.forEach(draw));
@@ -202,8 +207,8 @@ export async function whole([id], ctx) {
 
   const root = h('main', { class: 'screen whole' },
     h('header', { class: 'bar-top' },
-      backTo('My piece', `/piece/${id}`),
-      h('h1', {}, 'Whole piece'),
+      backTo(home.back, home.path),
+      h('h1', {}, part ? barsLabel(playable) : 'Whole piece'),
       clockView(clock)),
     pagesEl, footEl);
   return root;

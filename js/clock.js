@@ -1,16 +1,14 @@
 // Counts active practice on a piece today. Time is only saved when something happens, such as
 // a Clean or Slip tap, so a tablet left on the music stand doesn't keep adding minutes.
-import { addTime, secondsOn, playerDays } from './store.js';
-import { dayKey, goalSeconds, practiceMode, QUICK_SECONDS } from './model.js';
+import { addTime, secondsOn } from './store.js';
+import { dayKey, goalSeconds, practiceMode } from './model.js';
 import { session } from './session.js';
 import { h } from './ui.js';
 
 export class PracticeClock {
   constructor({ piece, bars, mode = null, limit = 120, keepOverLimit = false }) {
     this.pieceId = piece.id;
-    // A Quick practice fills the bar in five minutes, counting everything this player did today.
-    this.quickFor = session.quick && session.quick === piece.playerId ? piece.playerId : null;
-    this.goal = this.quickFor ? QUICK_SECONDS : goalSeconds(piece);
+    this.goal = goalSeconds(piece);
     this.bars = bars;
     this.mode = mode;
     this.limit = limit;
@@ -23,8 +21,7 @@ export class PracticeClock {
   }
 
   async load() {
-    const today = dayKey(Date.now());
-    this.saved = this.quickFor ? ((await playerDays(this.quickFor)).get(today)?.seconds || 0) : await secondsOn(this.pieceId, today);
+    this.saved = await secondsOn(this.pieceId, dayKey(Date.now()));
     this.goalDone = this.goal > 0 && this.saved >= this.goal;
     return this;
   }
@@ -123,7 +120,16 @@ export function stayAwake(clock, metronome) {
 }
 
 // What the player sees of the clock: a bar that fills, and a word. No minutes and no countdown.
+// During Today's practice it shows which stop this is, in place of the bar.
 export function clockView(clock) {
+  const t = session.today;
+  if (t && t.pieceId === clock.pieceId) {
+    const el = h('div', { class: 'clock stop-count', role: 'status' });
+    const show = () => { el.textContent = `Stop ${Math.min(t.total, t.done + (t.within || 0) + 1)} of ${t.total}`; };
+    clock.onChange = show;
+    show();
+    return el;
+  }
   const fill = h('i', { class: 'clock-fill' });
   const text = h('span', { class: 'clock-text' });
   const el = h('div', { class: 'clock', role: 'group', 'aria-label': 'Practice time today' },

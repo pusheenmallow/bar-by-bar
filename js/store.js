@@ -233,6 +233,19 @@ export function gradeAttempt(id, shadow) {
   return job;
 }
 
+// Marks the day's stops as finished, on the last play made today on this piece. That is what
+// ticks the day for a session that ended before five minutes were up.
+export function markStopsDone(pieceId) {
+  const job = attemptQueue.then(async () => {
+    const today = dayKey(Date.now());
+    const plays = (await byIndex('attempts', 'pieceId', pieceId)).filter((a) => (a.day || dayKey(a.at)) === today);
+    const last = plays.sort((a, b) => a.at - b.at).at(-1);
+    if (last && !last.stopsDone) await put('attempts', { ...last, stopsDone: true });
+  });
+  attemptQueue = job.catch((err) => console.error(err));
+  return job;
+}
+
 export const attemptsSaved = () => attemptQueue;
 
 /* ---------- pieces several people learn ---------- */

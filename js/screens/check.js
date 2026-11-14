@@ -8,7 +8,7 @@ import {
 import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
-import { missing, backTo } from './common.js';
+import { missing, backTo, sessionHome } from './common.js';
 import { practicePicker } from './pick.js';
 import { Shadow } from '../shadow.js';
 
@@ -19,7 +19,9 @@ export async function check([id], ctx) {
   const stage = checkStage(piece);
   // Back after a few days away, the first session is a short one: a warm-up and a few checks.
   // The rest stay ready for next time, and nothing is said about the gap.
-  const back = shortReturn(await playerDays(piece.playerId));
+  const home = sessionHome(id);
+  const t = home.inSession ? session.today : null;            // during Today's practice the queue sets the size
+  const back = t ? false : shortReturn(await playerDays(piece.playerId));
   const schedule = await scheduleMap(id);
   const assignment = await currentAssignment(id);
   const today = dayKey(Date.now());
@@ -27,15 +29,15 @@ export async function check([id], ctx) {
   // Opening the check is the "Ready" tap. Plays made on a bar earlier today were its warm-ups.
   const warmUpsOn = (bar) => earlier.filter((a) => a.barIds.includes(bar.id)).length;
   const pinned = activePins(piece, assignment);
-  const inScoreOrder = reviewGroups(piece, progress, schedule, { pinned, cap: back ? RETURN_STOPS : REVIEW_CAP });
-  let warmUp = back && stage ? warmUpBar(piece, progress, inScoreOrder) : null;
+  const inScoreOrder = reviewGroups(piece, progress, schedule, { pinned, cap: t ? t.reviewCap : back ? RETURN_STOPS : REVIEW_CAP });
+  let warmUp = (t ? t.warm : back) && stage ? warmUpBar(piece, progress, inScoreOrder) : null;
   // Mixed up, so the bars aren't always met in the order they come in the music.
   let groups = shuffle(inScoreOrder, session.shuffleSeed == null ? Math.random : seededRandom(session.shuffleSeed));
   let started = groups.length < 2;          // with more than one, the player picks where to start
   if (!stage || !groups.length) {
     return h('main', { class: 'screen' },
       h('p', { class: 'lead' }, 'Nothing is ready for a next-day check yet.'),
-      h('button', { class: 'btn', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece'));
+      h('button', { class: 'btn', onClick: () => goUp(home.path) }, home.done));
   }
 
   const clock = await new PracticeClock({ piece, bars: warmUp ? [warmUp] : groups[0] }).load();
@@ -77,6 +79,7 @@ export async function check([id], ctx) {
 
   const advance = () => {
     index += 1;
+    if (t) t.within += 1;
     if (index < groups.length) {
       clock.setBars(groups[index]);
       title.textContent = barsLabel(groups[index]);
@@ -88,7 +91,8 @@ export async function check([id], ctx) {
   };
 
   // The play that finishes today's stops says so, which is what ticks the day even on a short one.
-  const lastStop = () => (index === groups.length - 1 ? { stopsDone: true } : {});
+  // During Today's practice the queue does this itself, when its last stop is done.
+  const lastStop = () => (!t && index === groups.length - 1 ? { stopsDone: true } : {});
 
   async function clean() {
     stickOn();
@@ -150,7 +154,7 @@ export async function check([id], ctx) {
           class: 'btn',
           onClick: () => sheet(practicePicker({ piece, bars: [again[0]], progress, stageId: backStage }), { kind: 'bar-sheet' }),
         }, `Practise bar ${again[0].n}`) : null,
-        h('button', { class: 'btn primary', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece')))); }, () => root);
+        h('button', { class: 'btn primary', onClick: () => goUp(home.path) }, home.done)))); }, () => root);
   }
 
   const ro = new ResizeObserver(() => paint());
@@ -162,7 +166,7 @@ export async function check([id], ctx) {
       title.textContent = 'Warm-up';
       fill(side,
         h('p', { class: 'goal' }, `Play bar ${warmUp.n} once, any way you like.`),
-        h('button', { class: 'answer clean wide', onClick: () => { clock.touch(); warmUp = null; clock.setBars(groups[0]); showSide(); paint(); } }, 'Ready'));
+        h('button', { class: 'answer clean wide', onClick: () => { if (t) t.within += 1; clock.touch(); warmUp = null; clock.setBars(groups[0]); showSide(); paint(); } }, 'Ready'));
       return;
     }
     if (started) {
@@ -200,7 +204,7 @@ export async function check([id], ctx) {
 
   const root = h('main', { class: 'trainer check', vars: { pen: 'var(--tick-gold)' } },
     h('header', { class: 'train-top' },
-      backTo('My piece', `/piece/${id}`),
+      backTo(home.back, home.path),
       title,
       clockView(clock),
       h('span', { class: 'stage-tag' }, h('i', {}), stage.name)),

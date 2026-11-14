@@ -3,6 +3,15 @@ import { session } from '../session.js';
 import { SPEEDS, SPEED_STEP, speedTempo, speedPercent } from '../model.js';
 import { all, learnersOf } from '../store.js';
 
+// Where a practice screen goes when it is finished, and what it calls that: the score, or, during
+// Today's practice, back to the queue for the next stop.
+export function sessionHome(pieceId) {
+  const t = session.today;
+  return t && t.pieceId === pieceId
+    ? { inSession: true, path: t.path, back: 'Today', done: 'Next stop' }
+    : { inSession: false, path: `/piece/${pieceId}`, back: 'My piece', done: 'Back to my piece' };
+}
+
 export const missing = (text) => h('main', { class: 'screen' },
   h('p', { class: 'lead' }, text),
   h('button', { class: 'btn', onClick: () => go('/') }, 'Back to the start'));

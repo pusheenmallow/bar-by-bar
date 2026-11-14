@@ -10,7 +10,7 @@ import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
 import { stickOn, fanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
-import { missing, speedControl, backTo } from './common.js';
+import { missing, speedControl, backTo, sessionHome } from './common.js';
 import { Hearing } from '../hear.js';
 import { Shadow } from '../shadow.js';
 
@@ -24,6 +24,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   let bars = csv.split(',').map((b) => allBars.find((x) => x.id === b)).filter(Boolean);
   const stage = piece.stages.find((s) => s.id === stageId);
   if (!bars.length || !stage) return missing('That practice has gone.');
+  const home = sessionHome(id);
   const progress = await progressMap(id);
   const tried = await byIndex('attempts', 'pieceId', id);
   const good = goodRun(piece);
@@ -294,7 +295,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
       h('h2', { class: 'center' }, title),
       h('p', { class: 'center' }, line),
       h('div', { class: 'row-buttons narrow' },
-        h('button', { class: `btn ${next || canGoOn ? '' : 'primary'}`, onClick: () => { closeSheet(); leave(); } }, 'Back to my piece'),
+        h('button', { class: `btn ${next || canGoOn ? '' : 'primary'}`, onClick: () => { closeSheet(); leave(); } }, home.done),
         canGoOn && h('button', { class: `btn ${next ? '' : 'primary'}`, onClick: goForSolid }, `${more} more to make it solid`),
         next && h('button', {
           class: 'btn primary',
@@ -421,7 +422,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   }
 
   /* ---------- leaving ---------- */
-  function leave() { goUp(`/piece/${id}`); }
+  function leave() { goUp(home.path); }
 
   let letSleep = () => {};
 
@@ -446,7 +447,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
 
   return h('main', { class: 'trainer', vars: { pen: penVar(stage.pen) } },
     h('header', { class: 'train-top' },
-      backTo('My piece', `/piece/${id}`),
+      backTo(home.back, home.path),
       title,
       clockView(clock),
       h('span', { class: 'stage-tag' }, h('i', {}), stage.name)),

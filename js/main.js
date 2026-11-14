@@ -13,6 +13,7 @@ import { review } from './screens/review.js';
 import { settings } from './screens/settings.js';
 import { recordingScreen } from './screens/recording.js';
 import { assign } from './screens/assign.js';
+import { today } from './screens/today.js';
 import { session } from './session.js';
 import { setUpgradeGate } from './store.js';
 import { upgradeGate, upgradeFailed } from './upgrade.js';
@@ -26,7 +27,8 @@ const routes = [
   [/^\/piece\/([^/]+)$/, mapScreen],
   [/^\/train\/([^/]+)\/([^/]+)\/([^/]+)(?:\/(\d+))?$/, trainer],
   [/^\/check\/([^/]+)$/, check],
-  [/^\/whole\/([^/]+)$/, whole],
+  [/^\/whole\/([^/]+)(?:\/(\d+)\/(\d+))?$/, whole],
+  [/^\/today\/([^/]+)(?:\/(quick))?$/, today],
   [/^\/stats\/([^/]+)$/, stats],
   [/^\/parent$/, parentHome],
   [/^\/parent\/add$/, addPiece],

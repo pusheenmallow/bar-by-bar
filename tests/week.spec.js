@@ -1,7 +1,7 @@
 // Showing up: weekly dots, the five-minute rule, Quick practice and the short session after time away.
 // The clock is pinned, in Sydney time, so that "local day" and "Monday" are really tested.
 import {
-  weekDays, weekSummary, dayCounts, daysAway, shortReturn, weekTarget, quickPath, defaultStages, blankProgress,
+  weekDays, weekSummary, dayCounts, daysAway, shortReturn, weekTarget,
 } from '../js/model.js';
 import { test, expect, seedPiece, openGrownUps, attemptsFor } from './helpers.js';
 
@@ -78,24 +78,6 @@ test('the rules: a week runs Monday to Sunday, and a day counts at five minutes 
   expect(weekTarget({ weekTarget: 0 })).toBe(1);
 });
 
-test('a Quick practice starts with what is waiting, then what slipped, then what comes next', () => {
-  const bar = (id) => ({ id, skip: false });
-  const piece = { id: 'p', stages: defaultStages(), cleanTarget: 3, layout: [{ pageId: 'pg', rows: [{ top: 0, bottom: 1, lines: [0, 0.3, 0.6, 1], bars: [bar('a'), bar('b'), bar('c')] }] }] };
-  const now = new Date('2026-11-14T10:00:00').getTime();
-  const all = (when, more = {}) => ({ ...blankProgress('p', 'x'), done: { rh: when, lh: when, melody: when, slow: when, full: when, ...more } });
-  const progress = new Map();
-  expect(quickPath(piece, progress, now)).toBe('/train/p/a/rh/3');
-  progress.set('a', all(now - 3 * 86400000, { next: now - 86400000 }));
-  expect(quickPath(piece, progress, now)).toBe('/train/p/b/rh/3');
-  progress.set('c', { ...blankProgress('p', 'c'), runSlip: now - 1000 });
-  expect(quickPath(piece, progress, now)).toBe('/train/p/c/rh/3');
-  progress.set('b', all(now - 2 * 86400000));
-  expect(quickPath(piece, progress, now)).toBe('/check/p');
-  progress.set('b', all(now - 2 * 86400000, { next: now }));
-  progress.set('c', all(now - 2 * 86400000, { next: now }));
-  expect(quickPath(piece, progress, now)).toBe('/whole/p');
-});
-
 test('dots fill for practised days, show no missed days, and start again on Monday, local time', async ({ page }) => {
   await page.goto('/');
   await at(page, `${SUN}T23:30:00`);
@@ -111,7 +93,7 @@ test('dots fill for practised days, show no missed days, and start again on Mond
   await expect(filled(page)).toHaveCount(3);
   // Filled from the left, so a gap in the week can't be seen. Nothing names a day, a miss or a streak.
   expect(await dots(page).evaluateAll((els) => els.map((el) => el.className))).toEqual(['on', 'on', 'on', '']);
-  await expect(page.locator('main')).not.toContainText(/miss|streak|in a row|\bmin\b|today|\d:\d\d/i);
+  await expect(page.locator('main')).not.toContainText(/miss|streak|in a row|\bmin\b|\d:\d\d/i);
   await expect(page.locator('.week')).toHaveAttribute('aria-label', 'Practice days this week: 3 dots filled');
 
   // Half an hour later it is Monday in Sydney, though still Sunday in UTC.
@@ -246,35 +228,27 @@ test('grown-ups set the weekly target and see days and minutes; the player sees 
   await showPlayer(page, seeded.players.Pip);
   await expect(dots(page)).toHaveCount(6);
   await expect(filled(page)).toHaveCount(1);
-  await expect(page.locator('main')).not.toContainText(/\bmin\b|today|of 6|\d:\d\d/);
+  await expect(page.locator('main')).not.toContainText(/\bmin\b|of 6|\d:\d\d/);
   await expect(page.locator('.piece-row')).toContainText('0 of 12 bars started');
 });
 
-test('Quick practice is always offered, and its bar fills in five minutes of the player’s day', async ({ page }) => {
+test('Quick practice is always offered beside Today’s practice, and both open the piece practised last', async ({ page }) => {
   await page.goto('/');
   await at(page, `${SAT}T16:00:00`);
   const seeded = await seedPiece(page);
   const second = await seedPiece(page, { learners: ['Pip'], title: 'Tin Drum March' });
-  await addSeconds(page, seeded.pieces.Pip, SAT, 150);         // two and a half minutes already, on the other piece
-  await page.evaluate(async ({ pieceId, barId }) => {          // the march was practised last, so Quick practice goes there
+  await page.evaluate(async ({ pieceId, barId }) => {          // the march was practised last
     const store = await import('/js/store.js');
     const model = await import('/js/model.js');
     await store.put('progress', { ...model.blankProgress(pieceId, barId), slips: 1, lastPractised: Date.now() - 1000 });
   }, { pieceId: second.pieces.Pip, barId: second.bars[0] });
 
   await showPlayer(page, seeded.players.Pip);
+  await expect(page.getByRole('button', { name: 'Today’s practice' })).toBeVisible();
   const quick = page.getByRole('button', { name: /Quick practice/ });
   await expect(quick).toContainText('5 minutes');
   await quick.tap();
-  await expect(page).toHaveURL(new RegExp(`#/train/${second.pieces.Pip}/${second.bars[0]}/rh/3$`));
-  await expect(page.locator('.answer.clean')).toBeVisible();
-  const share = () => page.locator('.clock-fill').evaluate((el) => parseFloat(el.style.width));
-  expect(await share()).toBeGreaterThanOrEqual(50);            // 150 of 300 seconds, not of the piece's ten minutes
-  expect(await share()).toBeLessThan(60);
-
-  // An ordinary visit to the same bar measures against the piece's own goal again.
-  await showPlayer(page, seeded.players.Pip);
-  await page.goto(`/#/train/${second.pieces.Pip}/${second.bars[0]}/rh/3`);
-  await expect(page.locator('.answer.clean')).toBeVisible();
-  expect(await share()).toBeLessThan(5);
+  await expect(page).toHaveURL(new RegExp(`#/today/${second.pieces.Pip}/quick$`));
+  await expect(page.getByRole('heading', { name: 'Tin Drum March' })).toBeVisible();
+  await expect(page.locator('.today-body')).toContainText('Stop 1 of 1');
 });

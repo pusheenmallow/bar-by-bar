@@ -135,6 +135,7 @@ export async function settings([id], ctx) {
     h('div', { class: 'row-buttons left' },
       h('button', { class: 'btn primary', onClick: () => go(`/parent/bars/${id}`) }, 'Add notes and mark bars'),
       h('button', { class: 'btn', onClick: () => go(`/parent/assign/${id}`) }, 'This week’s assignment'),
+      h('button', { class: 'btn', onClick: () => go(`/parent/takes/${id}`) }, 'Recordings'),
       h('button', { class: 'btn', onClick: () => go(`/parent/stats/${id}`) }, 'Stats'),
       h('button', { class: 'btn', onClick: () => go(`/parent/review/${id}`) }, 'Check the boxes')),
 

@@ -14,6 +14,7 @@ import { settings } from './screens/settings.js';
 import { recordingScreen } from './screens/recording.js';
 import { assign } from './screens/assign.js';
 import { today } from './screens/today.js';
+import { takes } from './screens/takes.js';
 import { session } from './session.js';
 import { setUpgradeGate } from './store.js';
 import { upgradeGate, upgradeFailed } from './upgrade.js';
@@ -29,6 +30,8 @@ const routes = [
   [/^\/check\/([^/]+)$/, check],
   [/^\/whole\/([^/]+)(?:\/(\d+)\/(\d+))?$/, whole],
   [/^\/today\/([^/]+)(?:\/(quick))?$/, today],
+  [/^\/takes\/([^/]+)$/, takes],
+  [/^\/parent\/takes\/([^/]+)$/, (args, ctx) => takes(args, ctx, 'parent')],
   [/^\/stats\/([^/]+)$/, stats],
   [/^\/parent$/, parentHome],
   [/^\/parent\/add$/, addPiece],

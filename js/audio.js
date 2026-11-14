@@ -137,7 +137,8 @@ export async function prepare(blob) {
 /* ---------- recording in the app ---------- */
 
 // Phone-call clean-up is turned off, since it spoils the sound of a piano.
-export async function startRecording(onLevel) {
+// `bitrate` is lower for a learner's own takes, which only need to be listened to.
+export async function startRecording(onLevel, { bitrate = 128000 } = {}) {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
     throw new Error('This browser can’t record. Choose a file instead.');
   }
@@ -153,7 +154,7 @@ export async function startRecording(onLevel) {
   }
   const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
     .find((t) => MediaRecorder.isTypeSupported(t));
-  const recorder = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: 128000 } : undefined);
+  const recorder = new MediaRecorder(stream, type ? { mimeType: type, audioBitsPerSecond: bitrate } : undefined);
   const chunks = [];
   recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
   const finished = new Promise((resolve) => {

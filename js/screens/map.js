@@ -1,5 +1,5 @@
 import { h, go, fill, icon, sticker, crown, sheet, closeSheet, replaceSheet } from '../ui.js';
-import { get, put, progressMap, scheduleMap, currentAssignment, timeDocs, dayTotal, timeSaved } from '../store.js';
+import { get, put, progressMap, scheduleMap, currentAssignment, takesFor, timeDocs, dayTotal, timeSaved } from '../store.js';
 import {
   penVar, listBars, playableBars, blankProgress, checkStatus, waitingForCheck, topStage,
   solidStages, hasGold, barStep, activePins, reviewGroups, barsLabel, dayKey, newId, goalSeconds, timeText, clockText, numberRanges,
@@ -28,6 +28,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
   const bars = listBars(piece);
   const playable = playableBars(piece);
   const parent = grownUp;
+  const hasTakes = !parent && (await takesFor(id)).length > 0;
   const person = await get('players', piece.playerId);
   const hearing = grownUp ? null : await Hearing.load(piece, get);
   const tabs = grownUp ? await learnerTabs(piece, (other) => `/parent/bars/${other}`) : null;
@@ -170,6 +171,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
       h('button', { class: 'seg', onClick: () => go(`/whole/${id}`) }, 'Whole piece'),
       h('span', { class: 'seg-gap' }),
       seg('Time map', viewing === 'time', () => { viewing = viewing === 'time' ? 'stages' : 'time'; refresh(); }),
+      hasTakes && h('button', { class: 'seg', onClick: () => go(`/takes/${id}`) }, 'My recordings'),
       h('button', { class: 'seg', onClick: () => go(`/stats/${id}`) }, 'Stats'));
   }
 

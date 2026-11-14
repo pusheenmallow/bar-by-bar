@@ -1,7 +1,8 @@
-import { h, goUp, icon, sticker, sheet, toast, softly } from '../ui.js';
+import { h, go, goUp, icon, sticker, sheet, toast, softly } from '../ui.js';
 import { get, put, progressMap, scheduleMap, addAttempt } from '../store.js';
+import { startRecording } from '../audio.js';
 import {
-  listBars, playableBars, barsLabel, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges, scheduleOf, afterRunSlip, dayKey,
+  listBars, playableBars, barsLabel, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges, scheduleOf, afterRunSlip, dayKey, TAKE_LIMIT_SECONDS,
 } from '../model.js';
 import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
@@ -31,6 +32,11 @@ export async function whole([id, from, to], ctx) {
   let began = 0;
   let played = 0;
   let ticking = false;            // whether the metronome was on when the playing finished
+  let recordIt = false;           // the player asked for this play to be recorded
+  let recorder = null;
+  let takeSound = null;           // the finished recording, until the play is marked and it is saved
+  let tooLong = null;
+  let savedTake = false;
   const slipped = new Set();
   let tempo = piece.runTempo || slowTempo(piece);
   const met = new Metronome();
@@ -108,7 +114,13 @@ export async function whole([id, from, to], ctx) {
 
   function footer() {
     if (state === 'ready') {
-      footEl.replaceChildren(metRow, speed.el, h('button', { class: 'answer clean wide', onClick: start }, 'Start playing'));
+      // Recording is the player's choice, made before each play. Nothing is recorded otherwise.
+      const rec = h('button', {
+        class: `btn record-it ${recordIt ? 'on' : ''}`, 'aria-pressed': String(recordIt),
+        onClick: () => { recordIt = !recordIt; footer(); },
+      }, h('i', { class: 'rec-dot', 'aria-hidden': 'true' }), 'Record this play');
+      footEl.replaceChildren(metRow, speed.el, h('div', { class: 'start-row' }, rec,
+        h('button', { class: 'answer clean wide', onClick: start }, 'Start playing')));
     } else if (state === 'playing') {
       footEl.replaceChildren(metRow, h('div', { class: 'answers even' },
         runTime,
@@ -122,7 +134,18 @@ export async function whole([id, from, to], ctx) {
     }
   }
 
-  function start() {
+  async function start() {
+    if (state !== 'ready') return;
+    state = 'starting';
+    if (recordIt) {
+      try {
+        recorder = await startRecording(() => {}, { bitrate: 64000 });       // no level meter: nothing moves while playing
+        tooLong = setTimeout(() => { keepSound(); }, TAKE_LIMIT_SECONDS * 1000);
+      } catch (err) {
+        recorder = null;
+        toast(`${err.message || 'The microphone couldn’t start.'} Playing without recording.`);
+      }
+    }
     state = 'playing';
     began = Date.now();
     clock.start();
@@ -132,7 +155,18 @@ export async function whole([id, from, to], ctx) {
     footer();
   }
 
-  function stopPlaying() {
+  // Ends the recording and holds on to the sound.
+  async function keepSound() {
+    clearTimeout(tooLong);
+    if (!recorder) return;
+    const r = recorder;
+    recorder = null;
+    takeSound = await r.stop();
+  }
+
+  async function stopPlaying() {
+    if (state !== 'playing') return;
+    await keepSound();
     clearInterval(tick);
     clock.stop();
     ticking = met.running;
@@ -161,6 +195,15 @@ export async function whole([id, from, to], ctx) {
       const entry = scheduleOf(piece, b, progress.get(b.id), schedule.get(b.id));
       if (entry) await put('schedule', afterRunSlip(entry, dayKey(Date.now())));
     }
+    if (takeSound?.size) {
+      await put('takes', {
+        id: crypto.randomUUID(), pieceId: id, playerId: piece.playerId ?? null, at: began, day: dayKey(began), seconds: Math.round(played),
+        tempo: ticking ? tempo : null, bars: [playable[0].n, playable.at(-1).n], whole: !part, slips: list.length,
+        mime: takeSound.type, blob: takeSound,
+      });
+      savedTake = true;
+    }
+    takeSound = null;
     piece.runTempo = tempo;
     await put('pieces', piece);
     summary(list, played);
@@ -183,6 +226,7 @@ export async function whole([id, from, to], ctx) {
         : `You played for ${clockText(took)}.`),
       list.length ? h('div', { class: 'row-buttons narrow' }, list.slice(0, 4).map(practiseLink)) : null,
       h('div', { class: 'row-buttons narrow' },
+        savedTake && h('button', { class: 'btn', onClick: () => go(`/takes/${id}`) }, 'Hear it back'),
         h('button', { class: 'btn', onClick: () => ctx.rerender() }, 'Play it again'),
         h('button', { class: 'btn primary', onClick: () => goUp(home.path) }, home.done)))); }, () => root);
   }
@@ -200,6 +244,8 @@ export async function whole([id, from, to], ctx) {
     window.removeEventListener('themechange', redraw);
     ro.disconnect();
     clearInterval(tick);
+    clearTimeout(tooLong);
+    recorder?.cancel();                       // left part-way: nothing is kept
     clock.stop();
     met.dispose();
     letSleep();

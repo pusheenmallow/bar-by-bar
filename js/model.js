@@ -465,6 +465,29 @@ export function warmUpBar(piece, progress, checking) {
     || null;
 }
 
+/* ---------- the learner's own recordings ---------- */
+
+export const THEN_AFTER_DAYS = 21;            // "then and now" needs a first recording at least this much older
+export const TAKE_LIMIT_SECONDS = 15 * 60;    // a recording left running is stopped here
+
+// The first recording and the latest, once they are far enough apart to be worth comparing.
+export function thenAndNow(takes) {
+  const list = takes.slice().sort((a, b) => a.at - b.at);
+  if (list.length < 2) return null;
+  const then = list[0], now = list.at(-1);
+  return daysBetween(then.day, now.day) >= THEN_AFTER_DAYS ? { then, now } : null;
+}
+
+// How long ago a day was, in words a child reads easily. No dates.
+export function agoText(day, today) {
+  const n = daysBetween(day, today);
+  if (n <= 0) return 'Today';
+  if (n === 1) return 'Yesterday';
+  if (n < 14) return `${n} days ago`;
+  if (n < 60) return `${Math.floor(n / 7)} weeks ago`;
+  return `${Math.floor(n / 30)} months ago`;
+}
+
 /* ---------- today's practice ---------- */
 // A session is a short queue of stops: checks first (with a warm-up), then one or two new bars,
 // the join between the new bar and the one before, and one play-through to finish.

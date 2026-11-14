@@ -3,6 +3,7 @@ import { get, put, progressMap, byIndex, addAttempt } from '../store.js';
 import {
   penVar, listBars, barsLabel, blankProgress, mistakeList, rankMistakes, nextForBars, startTempo, clampTempo, easierTempo, fasterTempo,
   freshRun, afterClean, afterSlip, stageNeedsSpeed, goodRun, MASTERY_RUN, allSolid,
+  slowAfterSlips, fasterAfterCleans, handsOnSpeed, speedPercent, OFFER_AFTER,
 } from '../model.js';
 import { drawBars } from '../images.js';
 import { Metronome } from '../metronome.js';
@@ -29,6 +30,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   let target = chosenGoal;
 
   let run = freshRun();
+  let choseSlower = false;       // took the offer to slow down, and hasn't played clean since
   let ending = false;            // the last clean is saving, or its panel is open
   let tempo = startTempo(piece, stage);
   const clock = await new PracticeClock({ piece, bars }).load();
@@ -62,8 +64,10 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     if (beat < 0) showMetronomeOff();
   };
   const tempoEl = h('output', { class: 'tempo-value' }, tempo);
-  function setTempo(v) {
+  // `auto` is the app stepping the speed down or back up. Any other change is someone's own choice.
+  function setTempo(v, auto = false) {
     clock.touch();
+    if (!auto) { run = handsOnSpeed(run); choseSlower = false; }
     tempo = clampTempo(v);
     met.bpm = tempo;
     tempoEl.textContent = tempo;
@@ -173,15 +177,25 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
       run = freshRun();
       toast('Faster now, so the count starts again.');
     }
+    const slowedDown = run.slowed.length > 0;
+    const playedAt = tempo;
+    const tap = tapNow();                       // as it was played, before any step back up
     run = afterClean(run, tempo);
+    // At a full-speed stage, a play made during a slow-down can't be the last sticker.
+    if (slowedDown && stage.pace === 'target') run.tokens = Math.min(run.tokens, target - 1);
+    const step = fasterAfterCleans(run, tempo);
+    run = step.run;
+    if (step.back) setTempo(step.tempo, true);
+    if (slowedDown || choseSlower) sayKindly(slowWorked(playedAt, step.back ? step.tempo : null, slowedDown));
+    choseSlower = false;
     // Climbing towards full speed takes a good run at each step. Only full speed needs the long run.
-    const climbing = stageNeedsSpeed(piece, stage, tempo);
+    const climbing = !slowedDown && stageNeedsSpeed(piece, stage, tempo);
     const finished = run.tokens >= (climbing ? good : target);
     const passedGood = !finished && !climbing && run.tokens === good;
     ending = finished;
     showTokens('clean');
     stickOn();
-    await record('clean', null, { ...tapNow(), ticket: shadow?.ask() });
+    await record('clean', null, { ...tap, ticket: shadow?.ask() });
     if (finished) await finishRun();
     else if (passedGood) await colourIn();
   }
@@ -327,15 +341,32 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     record('slip', tag, tap);
   }
 
+  // Said between plays, in ordinary text: no colour change, no sound.
+  let slowNote = null;
+  const sayKindly = (text) => fill(coach, h('p', { class: 'goal kind' }, text));
+  const percentOf = (t) => Math.round(speedPercent(piece, t));
+  function slowWorked(playedAt, backTo, auto) {
+    const at = met.running ? ` Clean at ${percentOf(playedAt)}%.` : '';
+    if (backTo) return `Slower worked.${at} Back up to ${backTo} now.`;
+    return `Slower worked.${at}${auto ? ' One more like that.' : ''}`;
+  }
+
   function slip() {
     if (ending) return;
     clock.touch();
     saveSlip();
     unsaved = { ...tapNow(), ticket: shadow?.ask() };
     run = afterSlip(run);
+    const slow = slowAfterSlips(run, tempo);
+    run = slow.run;
+    slowNote = null;
+    if (slow.slowed) {
+      setTempo(slow.tempo, true);
+      slowNote = h('p', { class: 'kind' }, met.running ? `Let’s take it slower for a bit: ${slow.tempo}.` : 'Let’s take it slower for a bit.');
+    }
     showTokens('slip');
     peelOff();
-    fill(coach, h('div', { class: 'chips' },
+    fill(coach, slowNote, h('div', { class: 'chips' },
       h('span', { class: 'coach-ask' }, 'What happened?'),
       reasons.map((m) => h('button', {
         class: `chip ${m.id === lastReason ? 'last' : ''}`,
@@ -349,9 +380,8 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   }
 
   function showTip(m) {
-    const twice = run.slipsInRow >= 2;
-    if (twice) run.slipsInRow = 0;
-    fill(coach, h('p', { class: 'fix' }, m.fix), twice ? easier() : null);
+    const twice = run.slipsInRow === OFFER_AFTER;
+    fill(coach, slowNote, h('p', { class: 'fix' }, m.fix), twice ? easier() : null);
   }
 
   function easier() {
@@ -360,7 +390,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     const options = [];
     if (met.running) {
       const slower = easierTempo(tempo);
-      options.push(option(`Slow down to ${slower}`, () => setTempo(slower)));
+      options.push(option(`Slow down to ${slower}`, () => { setTempo(slower); choseSlower = true; }));
     }
     if (bars.length > 1) {
       const half = Math.ceil(bars.length / 2);

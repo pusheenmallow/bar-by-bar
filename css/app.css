@@ -446,6 +446,8 @@ textarea, input[type='text'], input[type='number'], select {
 .coach .chip.last { border-color: var(--brass); }
 .coach-ask { padding-right: 6px; font-weight: 500; }
 .coach .fix { font-size: 1rem; line-height: 1.4; }
+.coach .kind { font-size: .95rem; color: var(--ink-2); }
+.coach .goal.kind { font-size: 1rem; color: var(--ink); }
 .coach-easier { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; font-size: .9rem; color: var(--ink-2); }
 .coach-easier .btn { min-height: 42px; padding: 4px 12px; color: var(--ink); }
 .met { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 18px; }

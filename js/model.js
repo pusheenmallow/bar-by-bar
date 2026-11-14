@@ -343,7 +343,37 @@ export const speedPercent = (piece, tempo) => (tempo / piece.tempo) * 100;
 export const MASTERY_RUN = 7;
 export const goodRun = (piece) => Math.min(piece.cleanTarget || 3, MASTERY_RUN - 1);
 
-export const freshRun = () => ({ tokens: 0, slipsInRow: 0, speed: 0 });
+// `slowed` is the speeds stepped down from, most recent last, while an automatic slow-down is on.
+// `cleanSlow` counts the clean plays since the last step down.
+export const freshRun = () => ({ tokens: 0, slipsInRow: 0, speed: 0, slowed: [], cleanSlow: 0 });
 export const afterClean = (run, tempo) => ({ ...run, tokens: run.tokens + 1, slipsInRow: 0, speed: tempo });
 export const afterSlip = (run) => ({ ...run, tokens: Math.max(0, run.tokens - 1), slipsInRow: run.slipsInRow + 1 });
+
+// A mistake means slow down, never a penalty. Two slips in a row offer something easier. At three
+// the speed drops one notch by itself, and it steps back up after two clean plays.
+export const OFFER_AFTER = 2;
+export const SLOW_AFTER = 3;
+export const FASTER_AFTER = 2;
+
+// Call after afterSlip. Gives the run and the speed to use next.
+export function slowAfterSlips(run, tempo) {
+  if (run.slipsInRow < SLOW_AFTER) return { run, tempo, slowed: false };
+  const slower = easierTempo(tempo);
+  const counted = { ...run, slipsInRow: 0 };                       // the count to three starts again
+  if (slower >= tempo) return { run: counted, tempo, slowed: false };       // already as slow as it goes
+  return { run: { ...counted, slowed: [...run.slowed, tempo], cleanSlow: 0 }, tempo: slower, slowed: true };
+}
+
+// Call after afterClean. Steps back up one notch once enough clean plays have been made slower.
+// Stickers earned at the slower speed are kept.
+export function fasterAfterCleans(run, tempo) {
+  if (!run.slowed.length) return { run, tempo, back: false };
+  const cleanSlow = run.cleanSlow + 1;
+  if (cleanSlow < FASTER_AFTER) return { run: { ...run, cleanSlow }, tempo, back: false };
+  const up = run.slowed.at(-1);
+  return { run: { ...run, slowed: run.slowed.slice(0, -1), cleanSlow: 0, speed: up }, tempo: up, back: true };
+}
+
+// Someone set the speed by hand, so the automatic steps let go.
+export const handsOnSpeed = (run) => ({ ...run, slowed: [], cleanSlow: 0 });
 export const stageNeedsSpeed = (piece, stage, tempo) => stage.pace === 'target' && tempo < piece.tempo;

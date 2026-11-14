@@ -42,7 +42,7 @@ export function upgradeGate({ makeBackup }) {
     fill(buttons, h('button', { class: 'btn primary big', onClick: save }, 'Save the backup'));
     app().replaceChildren(h('main', { class: 'screen upgrade' },
       h('h1', {}, 'Bar by Bar has an update'),
-      h('p', { class: 'lead' }, 'First, a backup file of everything on this tablet is saved: players, pieces, progress and recordings. Then the update finishes. Nothing will look different.'),
+      h('p', { class: 'lead' }, 'First, a backup file of everything on this tablet is saved: players, pieces, progress and recordings. Then the update finishes. Nothing already on this tablet is changed or lost.'),
       buttons,
       status));
   });

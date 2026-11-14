@@ -2,11 +2,13 @@ import { newId, makeAttempt, withAttemptDefaults, dayKey } from './model.js';
 // Everything the app remembers lives in IndexedDB on this device.
 
 const NAME = 'bar-by-bar';
-const VERSION = 4;
+const VERSION = 5;
 let opened;
 
 /* ---------- the shape of the database ---------- */
 // Version 2 added `time`, version 3 `recordings`. Version 4 re-keyed `attempts`: see rekeyAttempts.
+// Version 5 added `schedule` (when each bar is next due, for each learner) and `assignments`
+// (what a teacher or parent set for the week). Both start empty: nothing already saved is changed.
 
 function createAttempts(db) {
   const store = db.createObjectStore('attempts', { keyPath: 'id' });
@@ -30,6 +32,8 @@ function upgrade(db, tx) {
   make('progress', { keyPath: 'key' }, 'pieceId');
   make('time', { keyPath: 'key' }, 'pieceId');
   make('recordings', { keyPath: 'pieceId' });
+  make('schedule', { keyPath: 'key' }, 'pieceId');
+  make('assignments', { keyPath: 'id' }, 'pieceId');
   if (!db.objectStoreNames.contains('attempts')) createAttempts(db);
   else rekeyAttempts(db, tx);
 }
@@ -174,6 +178,29 @@ export async function byIndex(store, index, value) {
   return done(db.transaction(store).objectStore(store).index(index).getAll(value));
 }
 
+export async function scheduleMap(pieceId) {
+  const rows = await byIndex('schedule', 'pieceId', pieceId);
+  return new Map(rows.map((s) => [s.barId, s]));
+}
+
+// The assignment in force for one learner's piece, or null. Older ones are kept, marked done.
+export async function currentAssignment(pieceId) {
+  const list = (await byIndex('assignments', 'pieceId', pieceId)).filter((a) => a.status === 'current');
+  return list.sort((a, b) => b.createdAt - a.createdAt)[0] || null;
+}
+
+// Saves this week's assignment, and marks any earlier one for the same learner's piece as done.
+export async function saveAssignment(assignment) {
+  const db = await open();
+  const tx = db.transaction('assignments', 'readwrite');
+  const os = tx.objectStore('assignments');
+  const others = await done(os.index('pieceId').getAll(assignment.pieceId));
+  others.filter((a) => a.id !== assignment.id && a.status === 'current').forEach((a) => os.put({ ...a, status: 'done' }));
+  os.put(assignment);
+  await finished(tx);
+  return assignment;
+}
+
 export const getMeta = async (key, fallback = null) => (await get('meta', key))?.value ?? fallback;
 export const setMeta = (key, value) => put('meta', { key, value });
 
@@ -253,9 +280,9 @@ export async function addLearner(piece, playerId) {
 // One person stops learning a piece. Their progress, tries and time go. The music stays for the others.
 export async function removeLearner(pieceId) {
   const db = await open();
-  const tx = db.transaction(['pieces', 'progress', 'attempts', 'time'], 'readwrite');
+  const tx = db.transaction(['pieces', 'progress', 'attempts', 'time', 'schedule', 'assignments'], 'readwrite');
   tx.objectStore('pieces').delete(pieceId);
-  for (const store of ['progress', 'attempts', 'time']) {
+  for (const store of ['progress', 'attempts', 'time', 'schedule', 'assignments']) {
     const os = tx.objectStore(store);
     const keys = await done(os.index('pieceId').getAllKeys(pieceId));
     keys.forEach((k) => os.delete(k));
@@ -269,11 +296,11 @@ export async function deletePiece(pieceId) {
   const group = piece ? groupOf(piece) : pieceId;
   const ids = new Set([pieceId, group, ...(piece ? (await learnersOf(piece)).map((p) => p.id) : [])]);
   const db = await open();
-  const tx = db.transaction(['pieces', 'pages', 'progress', 'attempts', 'time', 'recordings'], 'readwrite');
+  const tx = db.transaction(['pieces', 'pages', 'progress', 'attempts', 'time', 'recordings', 'schedule', 'assignments'], 'readwrite');
   tx.objectStore('recordings').delete(group);
   for (const id of ids) {
     tx.objectStore('pieces').delete(id);
-    for (const store of ['pages', 'progress', 'attempts', 'time']) {
+    for (const store of ['pages', 'progress', 'attempts', 'time', 'schedule', 'assignments']) {
       const os = tx.objectStore(store);
       const keys = await done(os.index('pieceId').getAllKeys(id));
       keys.forEach((k) => os.delete(k));
@@ -346,8 +373,9 @@ const toDataUrl = (blob) => new Promise((resolve, reject) => {
 });
 const fromDataUrl = async (url) => (await fetch(url)).blob();
 
-// Version 2 added the extra fields on attempts. Version 1 files still restore, with those fields filled in.
-const BACKUP_VERSION = 2;
+// Version 2 added the extra fields on attempts. Version 3 added the schedule and the assignments.
+// Older files still restore: version 1 with the attempt fields filled in, and both with no schedule.
+const BACKUP_VERSION = 3;
 
 export async function exportAll() {
   return exportFrom(await open());
@@ -367,6 +395,8 @@ async function exportFrom(db) {
     progress: await read('progress'),
     attempts: await read('attempts'),
     time: await read('time'),
+    schedule: await read('schedule'),
+    assignments: await read('assignments'),
     pages: [],
   };
   for (const p of pages) {
@@ -398,7 +428,7 @@ export async function importAll(file) {
   }
 
   const db = await open();
-  const stores = ['meta', 'players', 'pieces', 'pages', 'progress', 'attempts', 'time', 'recordings'];
+  const stores = ['meta', 'players', 'pieces', 'pages', 'progress', 'attempts', 'time', 'recordings', 'schedule', 'assignments'];
   const tx = db.transaction(stores, 'readwrite');
   stores.forEach((s) => tx.objectStore(s).clear());
   data.meta.forEach((v) => tx.objectStore('meta').put(v));
@@ -409,5 +439,7 @@ export async function importAll(file) {
   attempts.forEach((v) => tx.objectStore('attempts').put(v));
   (data.time || []).forEach((v) => tx.objectStore('time').put(v));     // older backups have none
   recordings.forEach((v) => tx.objectStore('recordings').put(v));
+  (data.schedule || []).forEach((v) => tx.objectStore('schedule').put(v));          // files before version 3 have neither
+  (data.assignments || []).forEach((v) => tx.objectStore('assignments').put(v));
   await finished(tx);
 }

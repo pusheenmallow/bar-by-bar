@@ -1,4 +1,4 @@
-// The upgrade from database version 3 to 4: a backup first, then the attempts are re-keyed
+// Upgrades. Version 4 to 5 only adds two empty stores. The upgrade from database version 3 to 4: a backup first, then the attempts are re-keyed
 // and nothing else changes. If anything goes wrong the database stays exactly as it was.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -7,6 +7,8 @@ import { dayKey } from '../js/model.js';
 import { test, expect, snapshot, counts, attemptsFor, openTrainer, seedPiece } from './helpers.js';
 import { madeUpTablet, buildOldDatabase, saveUpgradeBackup } from './v3.js';
 
+// The two stores version 5 adds start empty on every upgraded tablet.
+const withNewStores = (c) => ({ ...c, schedule: 0, assignments: 0 });
 const metaWithout = (snap, ...keys) => snap.stores.meta.rows.filter((row) => !keys.includes(row.key));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -18,13 +20,13 @@ function expectOtherStoresUntouched(after, before) {
   expect(metaWithout(after, 'lastBackup')).toEqual(metaWithout(before, 'lastBackup'));
 }
 
-test('a new tablet starts at version 4 with no backup step', async ({ page }) => {
+test('a new tablet starts at version 5 with no backup step', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('main')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Bar by Bar has an update' })).toHaveCount(0);
   const snap = await snapshot(page);
-  expect(snap.version).toBe(4);
-  expect(Object.keys(snap.stores)).toEqual(['attempts', 'meta', 'pages', 'pieces', 'players', 'progress', 'recordings', 'time']);
+  expect(snap.version).toBe(5);
+  expect(Object.keys(snap.stores)).toEqual(['assignments', 'attempts', 'meta', 'pages', 'pieces', 'players', 'progress', 'recordings', 'schedule', 'time']);
   expect(snap.stores.attempts).toMatchObject({ keyPath: 'id', autoIncrement: false, indexes: ['day', 'pieceId'] });
 });
 
@@ -46,7 +48,7 @@ test('a version 3 tablet is backed up, then upgraded with nothing lost', async (
   expect((await snapshot(page)).version).toBe(3);
 
   // The backup holds everything, and is a file this app can restore.
-  expect(file).toMatchObject({ app: 'bar-by-bar', backupVersion: 2 });
+  expect(file).toMatchObject({ app: 'bar-by-bar', backupVersion: 3 });
   for (const name of ['players', 'pieces', 'pages', 'progress', 'attempts', 'time', 'recordings']) {
     expect(file[name], `"${name}" in the backup`).toHaveLength(before.stores[name].rows.length);
   }
@@ -57,8 +59,8 @@ test('a version 3 tablet is backed up, then upgraded with nothing lost', async (
   await expect(page.locator('.name', { hasText: 'Juno' })).toBeVisible();
 
   const after = await snapshot(page);
-  expect(after.version).toBe(4);
-  expect(counts(after)).toEqual(counts(before));
+  expect(after.version).toBe(5);
+  expect(counts(after)).toEqual(withNewStores(counts(before)));
   expectOtherStoresUntouched(after, before);
   expect(after.stores.meta.rows.find((r) => r.key === 'lastBackup').value).toBeGreaterThan(before.stores.meta.rows.find((r) => r.key === 'lastBackup').value);
 
@@ -160,8 +162,8 @@ for (const kind of ['an error thrown part-way', 'a row the new store refuses']) 
     await page.getByRole('button', { name: 'Finish the update' }).tap();
     await expect(page.locator('.name', { hasText: 'Pip' })).toBeVisible();
     const after = await snapshot(page);
-    expect(after.version).toBe(4);
-    expect(counts(after)).toEqual(counts(before));
+    expect(after.version).toBe(5);
+    expect(counts(after)).toEqual(withNewStores(counts(before)));
     expectOtherStoresUntouched(after, before);
     expect(after.stores.attempts.rows.map((a) => a.id)).toEqual([1, 2, 3, 5, 6, 9, 10, 14, 15]);
   });
@@ -216,8 +218,8 @@ test('data written by the version 3 app itself upgrades with nothing lost', asyn
   await expect(page.locator('.name', { hasText: 'Pip' })).toBeVisible();
 
   const after = await snapshot(page);
-  expect(after.version).toBe(4);
-  expect(counts(after)).toEqual({ ...counts(before), meta: counts(before).meta + 1 });       // plus the time of the backup
+  expect(after.version).toBe(5);
+  expect(counts(after)).toEqual(withNewStores({ ...counts(before), meta: counts(before).meta + 1 }));       // plus the time of the backup
   expectOtherStoresUntouched(after, before);
   expect(after.stores.attempts).toMatchObject({ keyPath: 'id', autoIncrement: false, indexes: ['day', 'pieceId'] });
   after.stores.attempts.rows.forEach((now, i) => {
@@ -246,10 +248,39 @@ test('a tablet still on version 2 upgrades too, gaining the stores it lacked', a
   await expect(page.locator('.name', { hasText: 'Juno' })).toBeVisible();
 
   const after = await snapshot(page);
-  expect(after.version).toBe(4);
+  expect(after.version).toBe(5);
   expect(after.stores.recordings.rows).toEqual([]);
   for (const name of ['players', 'pieces', 'pages', 'progress', 'time']) expect(after.stores[name]).toEqual(before.stores[name]);
   expect(after.stores.attempts.rows.map((a) => a.id)).toEqual([1, 2, 3, 5, 6, 9, 10, 14, 15]);
+});
+
+test('a version 4 tablet is backed up, then gains an empty schedule and assignments with nothing else touched', async ({ page }) => {
+  const tablet = await madeUpTablet(page);
+  // As the version 4 app left them: every attempt with its day, player and source.
+  tablet.attempts = tablet.attempts.map((a) => ({ ...a, day: dayKey(a.at), playerId: tablet.pieces.find((p) => p.id === a.pieceId)?.playerId ?? null, source: 'legacy' }));
+  await buildOldDatabase(page, tablet, { version: 4 });
+  const before = await snapshot(page);
+  expect(before.version).toBe(4);
+  expect(Object.keys(before.stores)).not.toContain('schedule');
+
+  await page.goto('/');
+  const file = await saveUpgradeBackup(page, readFile);
+  expect(file).toMatchObject({ app: 'bar-by-bar', backupVersion: 3, schedule: [], assignments: [] });
+  expect((await snapshot(page)).version).toBe(4);                          // nothing changes until the backup is saved
+  await page.getByRole('button', { name: 'Finish the update' }).tap();
+  await expect(page.locator('.name', { hasText: 'Pip' })).toBeVisible();
+
+  const after = await snapshot(page);
+  expect(after.version).toBe(5);
+  expectOtherStoresUntouched(after, before);
+  expect(after.stores.attempts).toEqual(before.stores.attempts);
+  expect(after.stores.schedule).toMatchObject({ keyPath: 'key', indexes: ['pieceId'], rows: [] });
+  expect(after.stores.assignments).toMatchObject({ keyPath: 'id', indexes: ['pieceId'], rows: [] });
+
+  // Opening the app again asks for nothing more.
+  await page.reload();
+  await expect(page.locator('.name', { hasText: 'Pip' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Bar by Bar has an update' })).toHaveCount(0);
 });
 
 test('an upgraded tablet and a new one end up with the same database shape', async ({ page, browser }) => {
@@ -292,8 +323,8 @@ test('a real backup upgrades with every count unchanged (only with REAL_BACKUP_P
   console.log('rows before the upgrade:', JSON.stringify(counts(before)));
   console.log('rows after the upgrade: ', JSON.stringify(counts(after)));
   const tally = (snap) => ({ ...counts(snap), meta: metaWithout(snap, 'lastBackup').length });     // the backup step notes its own time
-  expect(after.version).toBe(4);
-  expect(tally(after)).toEqual(tally(before));
+  expect(after.version).toBe(5);
+  expect(tally(after)).toEqual(withNewStores(tally(before)));
   expect(print(metaWithout(after, 'lastBackup'))).toBe(print(metaWithout(before, 'lastBackup')));
   expect(fingerprints(after, unchanged)).toEqual(fingerprints(before, unchanged));
   expect(print(after.stores.attempts.rows.map((a) => a.id))).toBe(print(before.stores.attempts.rows.map((a) => a.id)));

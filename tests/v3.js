@@ -150,7 +150,11 @@ export async function buildOldDatabase(page, from, { version = 3 } = {}) {
         make('pieces', { keyPath: 'id' }, 'playerId');
         make('pages', { keyPath: 'id' }, 'pieceId');
         make('progress', { keyPath: 'key' }, 'pieceId');
-        make('attempts', { keyPath: 'id', autoIncrement: true }, 'pieceId');
+        if (version >= 4) {                 // version 4 gave attempts their own ids, and a day index
+          const attempts = made.createObjectStore('attempts', { keyPath: 'id' });
+          attempts.createIndex('pieceId', 'pieceId');
+          attempts.createIndex('day', 'day');
+        } else make('attempts', { keyPath: 'id', autoIncrement: true }, 'pieceId');
         if (version >= 2) make('time', { keyPath: 'key' }, 'pieceId');
         if (version >= 3) make('recordings', { keyPath: 'pieceId' });
       };

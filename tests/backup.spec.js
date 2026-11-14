@@ -1,4 +1,4 @@
-// The backup file: version 3 goes out and comes back whole, and older files still restore.
+// The backup file: version 4 goes out and comes back whole, and older files still restore.
 import { readFile } from 'node:fs/promises';
 import { dayKey } from '../js/model.js';
 import {
@@ -51,22 +51,25 @@ function asVersion1(backup, pieceId, barIds) {
   };
 }
 
-test('a version 3 backup restores everything exactly, schedule and assignments included', async ({ page }) => {
+test('a version 4 backup restores everything exactly, schedule, assignments and takes included', async ({ page }) => {
   const seeded = await usedTablet(page);
   await page.evaluate(async ({ pieceId, barId }) => {
     const store = await import('/js/store.js');
     await store.put('schedule', { key: `${pieceId}|${barId}`, pieceId, barId, step: 2, dueDay: '2026-11-20', lastDay: '2026-11-18', lapses: 1, kept: true });
+    await store.put('takes', { id: 'made-up-take', pieceId, playerId: 'x', at: 1700000000000, day: '2023-11-15', seconds: 12, tempo: 80, bars: [1, 12], mime: 'audio/webm', blob: new Blob([new Uint8Array([26, 69, 223, 163, 1, 2, 3])], { type: 'audio/webm' }) });
     await store.saveAssignment({ id: 'made-up-assignment', pieceId, status: 'current', createdAt: Date.now(), bars: '1-4', pins: '2', lessonDate: '2026-11-21', note: 'Curved fingers' });
   }, { pieceId: seeded.pieces.Juno, barId: seeded.bars[3] });
   await openGrownUps(page);
   const before = await snapshot(page);
-  expect(counts(before)).toMatchObject({ players: 2, pieces: 2, pages: 1, recordings: 1, attempts: 5, schedule: 1, assignments: 1 });
+  expect(counts(before)).toMatchObject({ players: 2, pieces: 2, pages: 1, recordings: 1, attempts: 5, schedule: 1, assignments: 1, takes: 1 });
 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Save a backup file' }).tap();
   const file = JSON.parse(await readFile(await (await download).path(), 'utf8'));
   await expect(page.locator('.toast')).toContainText('Backup saved');
-  expect(file.backupVersion).toBe(3);
+  expect(file.backupVersion).toBe(4);
+  expect(file.takes).toHaveLength(1);
+  expect(file.takes[0].data).toMatch(/^data:audio\/webm/);
   expect(file.schedule).toHaveLength(1);
   expect(file.assignments).toHaveLength(1);
   expect(file.attempts).toHaveLength(5);
@@ -96,8 +99,8 @@ test('a version 1 backup restores, with the new attempt fields filled in', async
   await page.goto('/');
   await restoreBackup(page, file);
   const snap = await snapshot(page);
-  expect(snap.version).toBe(5);
-  expect(counts(snap)).toMatchObject({ players: 2, pieces: 2, pages: 1, progress: file.progress.length, attempts: 4, time: 0, recordings: 0, schedule: 0, assignments: 0 });
+  expect(snap.version).toBe(6);
+  expect(counts(snap)).toMatchObject({ players: 2, pieces: 2, pages: 1, progress: file.progress.length, attempts: 4, time: 0, recordings: 0, schedule: 0, assignments: 0, takes: 0 });
 
   const attempts = await attemptsFor(page, seeded.pieces.Pip);
   expect(attempts.map((a) => a.id)).toEqual([1, 2, 3, 7]);
@@ -128,7 +131,7 @@ test('a file that is not a backup, or from a newer app, changes nothing', async 
 
   await restoreBackup(page, 'not json at all', { expectToast: 'not a Bar by Bar backup' });
   await restoreBackup(page, { ...good, app: 'something-else' }, { expectToast: 'not a Bar by Bar backup' });
-  await restoreBackup(page, { ...good, backupVersion: 4 }, { expectToast: 'newer version of Bar by Bar' });
+  await restoreBackup(page, { ...good, backupVersion: 5 }, { expectToast: 'newer version of Bar by Bar' });
 
   const after = await snapshot(page);
   delete before.stores.meta; delete after.stores.meta;          // choosing the PIN came in between

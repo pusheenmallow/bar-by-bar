@@ -1,4 +1,4 @@
-import { newId, makeAttempt, withAttemptDefaults } from './model.js';
+import { newId, makeAttempt, withAttemptDefaults, dayKey } from './model.js';
 // Everything the app remembers lives in IndexedDB on this device.
 
 const NAME = 'bar-by-bar';
@@ -311,6 +311,29 @@ export const dayTotal = (doc) => (doc ? doc.modes.bar + doc.modes.phrase + doc.m
 export async function secondsOn(pieceId, day) {
   await timeQueue;
   return dayTotal(await get('time', `${pieceId}|${day}`));
+}
+
+// What one player did on each day, over all their pieces: seconds practised, plays marked, and
+// whether they finished that day's stops (a next-day check played to its end).
+// Worked out from the time records and the attempts each time, so nothing extra is stored.
+export async function playerDays(playerId) {
+  await timeQueue;
+  await attemptQueue;
+  const days = new Map();
+  const on = (day) => {
+    if (!days.has(day)) days.set(day, { seconds: 0, plays: 0, stops: false });
+    return days.get(day);
+  };
+  for (const piece of await byIndex('pieces', 'playerId', playerId)) {
+    if (piece.draft) continue;
+    for (const doc of await timeDocs(piece.id)) on(doc.day).seconds += dayTotal(doc);
+    for (const a of await byIndex('attempts', 'pieceId', piece.id)) {
+      const entry = on(a.day || dayKey(a.at));
+      entry.plays += 1;
+      if (a.stopsDone) entry.stops = true;
+    }
+  }
+  return days;
 }
 
 /* ---------- backup ---------- */

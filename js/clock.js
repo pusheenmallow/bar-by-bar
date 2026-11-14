@@ -1,13 +1,16 @@
 // Counts active practice on a piece today. Time is only saved when something happens, such as
 // a Clean or Slip tap, so a tablet left on the music stand doesn't keep adding minutes.
-import { addTime, secondsOn } from './store.js';
-import { dayKey, goalSeconds, practiceMode, clockText } from './model.js';
+import { addTime, secondsOn, playerDays } from './store.js';
+import { dayKey, goalSeconds, practiceMode, clockText, QUICK_SECONDS } from './model.js';
+import { session } from './session.js';
 import { h } from './ui.js';
 
 export class PracticeClock {
   constructor({ piece, bars, mode = null, limit = 120, keepOverLimit = false }) {
     this.pieceId = piece.id;
-    this.goal = goalSeconds(piece);
+    // A Quick practice fills the bar in five minutes, counting everything this player did today.
+    this.quickFor = session.quick && session.quick === piece.playerId ? piece.playerId : null;
+    this.goal = this.quickFor ? QUICK_SECONDS : goalSeconds(piece);
     this.bars = bars;
     this.mode = mode;
     this.limit = limit;
@@ -20,7 +23,8 @@ export class PracticeClock {
   }
 
   async load() {
-    this.saved = await secondsOn(this.pieceId, dayKey(Date.now()));
+    const today = dayKey(Date.now());
+    this.saved = this.quickFor ? ((await playerDays(this.quickFor)).get(today)?.seconds || 0) : await secondsOn(this.pieceId, today);
     this.goalDone = this.goal > 0 && this.saved >= this.goal;
     return this;
   }

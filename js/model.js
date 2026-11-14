@@ -284,6 +284,76 @@ export function seededRandom(seed) {
 // which one to start with, and only that: the rest keep the order they were dealt.
 export const withFirst = (order, first) => (order.includes(first) ? [first, ...order.filter((g) => g !== first)] : order);
 
+/* ---------- showing up ---------- */
+// Any practice counts. A day is ticked after five minutes, or after finishing the day's stops,
+// whichever comes first. There is no streak: a week has a target number of days, shown as dots
+// that fill. Missed days are not shown at all, and every Monday starts clean.
+
+export const DAY_SECONDS = 5 * 60;
+export const QUICK_SECONDS = 5 * 60;          // a Quick practice is exactly enough to tick the day
+export const DEFAULT_WEEK_TARGET = 4;
+export const RETURN_AFTER_DAYS = 3;           // this many days away makes the first session back a short one
+export const RETURN_STOPS = 4;
+
+export const weekTarget = (player) => Math.min(7, Math.max(1, Math.round(player?.weekTarget ?? DEFAULT_WEEK_TARGET)));
+
+const noon = (day) => { const [y, m, d] = day.split('-').map(Number); return new Date(y, m - 1, d, 12); };
+export const daysBetween = (from, to) => Math.round((noon(to) - noon(from)) / 86400000);
+
+// The seven local days of the week `now` falls in, Monday first.
+export function weekDays(now = Date.now()) {
+  const d = new Date(now);
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return Array.from({ length: 7 }, (_, i) => dayKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + i, 12).getTime()));
+}
+
+// `entry` is one day of a player's practice: { seconds, stops, plays }. See playerDays in store.js.
+export const dayCounts = (entry) => !!entry && (entry.seconds >= DAY_SECONDS || !!entry.stops);
+
+// This week for one player. `dots` is what the child sees: one dot for each target day, filled from
+// the left as days are practised, with an extra filled dot for any day beyond the target.
+export function weekSummary(days, target, now = Date.now()) {
+  const week = weekDays(now);
+  const practised = week.filter((day) => dayCounts(days.get(day))).length;
+  const seconds = week.reduce((sum, day) => sum + (days.get(day)?.seconds || 0), 0);
+  return {
+    practised, target, seconds, met: practised >= target,
+    dots: Array.from({ length: Math.max(target, practised) }, (_, i) => i < practised),
+  };
+}
+
+// Whole days with no practice at all since the last time, or null for someone who has never practised.
+export function daysAway(days, now = Date.now()) {
+  const today = dayKey(now);
+  const last = [...days.entries()].filter(([day, e]) => day <= today && (e.seconds > 0 || e.plays > 0)).map(([day]) => day).sort().at(-1);
+  return last ? Math.max(0, daysBetween(last, today) - 1) : null;
+}
+export const shortReturn = (days, now = Date.now()) => (daysAway(days, now) ?? 0) >= RETURN_AFTER_DAYS;
+
+// A bar the player already has, to start a session back with something that goes well.
+// Never one that is about to be checked, since a check is a first try.
+export function warmUpBar(piece, progress, checking) {
+  const busy = new Set(checking.flat().map((b) => b.id));
+  const free = playableBars(piece).filter((b) => !busy.has(b.id));
+  return free.find((b) => hasGold(piece, progress.get(b.id)))
+    || free.find((b) => progress.get(b.id)?.crowns && Object.keys(progress.get(b.id).crowns).length)
+    || free.find((b) => topStage(piece, progress.get(b.id)))
+    || null;
+}
+
+// Where a Quick practice starts on a piece: what is waiting, then what slipped, then what comes next.
+export function quickPath(piece, progress, now = Date.now()) {
+  if (checkStage(piece) && checkGroups(piece, progress, now).length) return `/check/${piece.id}`;
+  const bars = playableBars(piece);
+  const unfinished = (b) => nextForBars(piece, [b], progress);
+  const bar = bars.find((b) => progress.get(b.id)?.runSlip)
+    || bars.find((b) => progress.get(b.id)?.flagged && unfinished(b))
+    || bars.find(unfinished);
+  const stage = bar && (unfinished(bar) || practiceStages(piece).at(-1));
+  return bar && stage ? `/train/${piece.id}/${bar.id}/${stage.id}/${goodRun(piece)}` : `/whole/${piece.id}`;
+}
+
 /* ---------- practice time ---------- */
 
 export const practiceMode = (count) => (count <= 2 ? 'bar' : 'phrase');

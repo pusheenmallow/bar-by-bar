@@ -1,10 +1,10 @@
 import { h, go, icon, sheet, closeSheet, toast, confirmSheet } from '../ui.js';
-import { all, put, del, byIndex, getMeta, setMeta, exportAll, importAll, progressMap, groupOf, learnersOf, removeLearner, deletePiece } from '../store.js';
-import { penVar, PLAYER_PENS, newId, playableBars, topStage, nameList } from '../model.js';
+import { all, put, del, byIndex, getMeta, setMeta, exportAll, importAll, progressMap, groupOf, learnersOf, removeLearner, deletePiece, playerDays } from '../store.js';
+import { penVar, PLAYER_PENS, newId, playableBars, topStage, nameList, weekSummary, weekTarget, timeText } from '../model.js';
 import { themeChoice, setTheme } from '../theme.js';
 import { session } from '../session.js';
 import { isMuted, setMuted } from '../sound.js';
-import { field, busyPanel, doneButton, leaveGrownUps } from './common.js';
+import { field, busyPanel, doneButton, leaveGrownUps, stepper } from './common.js';
 import { shadowOn, setShadow } from '../shadow.js';
 
 const hash = async (pin) => {
@@ -85,6 +85,7 @@ export async function gate(next) {
 
 function playerSheet(existing, done) {
   let chosen = existing?.pen || PLAYER_PENS[0];
+  let target = weekTarget(existing);
   const name = h('input', { type: 'text', value: existing?.name || '', autocomplete: 'off', maxlength: 24 });
   const row = h('div', { class: 'pen-pick', role: 'radiogroup', 'aria-label': 'Pen colour' });
   const paint = () => row.replaceChildren(...PLAYER_PENS.map((p) => h('button', {
@@ -101,6 +102,9 @@ function playerSheet(existing, done) {
     field('Name', name),
     h('span', { class: 'field-label' }, 'Their pen'),
     row,
+    h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Practice days a week'),
+      stepper({ label: 'Practice days a week', value: target, min: 1, max: 7, format: (v) => `${v} of 7`, onChange: (v) => { target = v; } }),
+      h('span', { class: 'field-hint' }, 'A day counts after 5 minutes, or once the day’s next-day checks are finished. The player sees this many dots, and they fill as the week goes. A missed day isn’t marked, and Monday starts fresh.')),
     h('div', { class: 'row-buttons' },
       existing && h('button', {
         class: 'btn danger',
@@ -134,7 +138,7 @@ function playerSheet(existing, done) {
         onClick: async () => {
           const text = name.value.trim();
           if (!text) { name.focus(); return; }
-          await put('players', { id: existing?.id || newId(), name: text, pen: chosen, createdAt: existing?.createdAt || Date.now() });
+          await put('players', { ...existing, id: existing?.id || newId(), name: text, pen: chosen, weekTarget: target, createdAt: existing?.createdAt || Date.now() });
           closeSheet();
           done();
         },
@@ -151,6 +155,13 @@ export async function parentHome(_, ctx) {
   const safe = await navigator.storage?.persisted?.();
   const shadowing = await shadowOn();
   const nameOf = (id) => players.find((p) => p.id === id)?.name || 'Nobody';
+  // Grown-ups see the week in days and minutes. The player sees only dots.
+  const weeks = new Map();
+  for (const p of players) weeks.set(p.id, weekSummary(await playerDays(p.id), weekTarget(p)));
+  const weekLine = (p) => {
+    const w = weeks.get(p.id);
+    return `This week: ${w.practised} of ${w.target} ${w.target === 1 ? 'day' : 'days'}, ${timeText(w.seconds)}`;
+  };
 
   // One row for each piece, naming everyone learning it.
   const groups = new Map();
@@ -239,7 +250,8 @@ export async function parentHome(_, ctx) {
       h('h2', {}, 'Players'),
       players.map((p) => h('button', {
         class: 'list-row', onClick: () => playerSheet(p, () => ctx.rerender()),
-      }, h('span', { class: 'swatch', style: { background: penVar(p.pen) } }), h('span', { class: 'row-main' }, p.name))),
+      }, h('span', { class: 'swatch', style: { background: penVar(p.pen) } }), h('span', { class: 'row-main' }, p.name),
+      h('span', { class: 'row-sub' }, weekLine(p)))),
       h('button', { class: 'btn', onClick: () => playerSheet(null, () => ctx.rerender()) }, 'Add a player')),
 
     h('section', { class: 'block' },

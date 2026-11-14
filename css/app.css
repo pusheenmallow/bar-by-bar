@@ -189,6 +189,14 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 .name span, .name-title span { padding-bottom: .04em; border-bottom: 3px solid var(--pen); }
 .name-title { font-weight: 300; font-size: clamp(1.8rem, 5vw, 2.4rem); }
 
+/* ---------- this week ---------- */
+.week-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; min-height: 52px; }
+.week { display: flex; align-items: center; gap: 10px; }
+.week i { display: block; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line); }
+.week i.on { background: var(--pen, var(--brass)); border-color: var(--pen, var(--brass)); }
+.btn.quick { display: inline-flex; align-items: baseline; gap: 8px; }
+.quick-sub { color: var(--ink-2); font-size: .85rem; }
+
 /* ---------- pieces ---------- */
 .piece-list { display: flex; flex-direction: column; }
 .piece-row {

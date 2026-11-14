@@ -1,7 +1,10 @@
 import { h, fill, goUp, softly, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
-import { get, put, progressMap, addAttempt } from '../store.js';
+import { get, put, progressMap, addAttempt, playerDays } from '../store.js';
 import { session } from '../session.js';
-import { checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress, shuffle, seededRandom, withFirst } from '../model.js';
+import {
+  checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress, shuffle, seededRandom, withFirst,
+  shortReturn, warmUpBar, RETURN_STOPS,
+} from '../model.js';
 import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
@@ -14,7 +17,12 @@ export async function check([id], ctx) {
   if (!piece) return missing('That piece has gone.');
   const progress = await progressMap(id);
   const stage = checkStage(piece);
-  const inScoreOrder = checkGroups(piece, progress);
+  // Back after a few days away, the first session is a short one: a warm-up and a few checks.
+  // The rest stay ready for next time, and nothing is said about the gap.
+  const back = shortReturn(await playerDays(piece.playerId));
+  const waiting = checkGroups(piece, progress);
+  const inScoreOrder = back ? waiting.slice(0, RETURN_STOPS) : waiting;
+  let warmUp = back && stage ? warmUpBar(piece, progress, inScoreOrder) : null;
   // Mixed up, so the bars aren't always met in the order they come in the music.
   let groups = shuffle(inScoreOrder, session.shuffleSeed == null ? Math.random : seededRandom(session.shuffleSeed));
   let started = groups.length < 2;          // with more than one, the player picks where to start
@@ -24,7 +32,7 @@ export async function check([id], ctx) {
       h('button', { class: 'btn', onClick: () => goUp(`/piece/${id}`) }, 'Back to my piece'));
   }
 
-  const clock = await new PracticeClock({ piece, bars: groups[0] }).load();
+  const clock = await new PracticeClock({ piece, bars: warmUp ? [warmUp] : groups[0] }).load();
   const shadow = await Shadow.load();          // null unless a grown-up is grading alongside
   let index = 0, passed = 0;
   const again = [];
@@ -34,10 +42,10 @@ export async function check([id], ctx) {
   let spots = [];
 
   async function paint() {
-    if (!started) return;
+    if (!started && !warmUp) { crop.width = 0; return; }
     const box = { width: cropBox.clientWidth - 8, height: cropBox.clientHeight - 8 };
     if (box.width < 40 || box.height < 40) return;
-    spots = (await drawBars(crop, groups[index], box)).spots;
+    spots = (await drawBars(crop, warmUp ? [warmUp] : groups[index], box)).spots;
   }
 
   const save = async (bar, ok) => {
@@ -62,6 +70,9 @@ export async function check([id], ctx) {
     }
   };
 
+  // The play that finishes today's stops says so, which is what ticks the day even on a short one.
+  const lastStop = () => (index === groups.length - 1 ? { stopsDone: true } : {});
+
   async function clean() {
     stickOn();
     const at = Date.now();
@@ -69,6 +80,7 @@ export async function check([id], ctx) {
     for (const b of groups[index]) await save(b, true);
     const attempt = await addAttempt(piece, {
       barIds: groups[index].map((b) => b.id), stageId: stage.id, source: 'check', result: 'clean', at, shadow: ticket?.grade ?? null,
+      extra: lastStop(),
     });
     shadow?.saved(ticket, attempt);
     advance();
@@ -76,7 +88,9 @@ export async function check([id], ctx) {
 
   const recordSlip = async (bar, tag, at, ticket) => {
     for (const b of groups[index]) await save(b, b.id !== bar.id);
-    const attempt = await addAttempt(piece, { barIds: [bar.id], stageId: stage.id, source: 'check', result: 'slip', tag, at, shadow: ticket?.grade ?? null });
+    const attempt = await addAttempt(piece, {
+      barIds: [bar.id], stageId: stage.id, source: 'check', result: 'slip', tag, at, shadow: ticket?.grade ?? null, extra: lastStop(),
+    });
     shadow?.saved(ticket, attempt);
   };
 
@@ -127,6 +141,13 @@ export async function check([id], ctx) {
   // The one choice the player gets: which stop goes first.
   const side = h('section', { class: 'train-side' });
   function showSide() {
+    if (warmUp) {                           // not marked and not saved: it is only to get going
+      title.textContent = 'Warm-up';
+      fill(side,
+        h('p', { class: 'goal' }, `Play bar ${warmUp.n} once, any way you like.`),
+        h('button', { class: 'answer clean wide', onClick: () => { clock.touch(); warmUp = null; clock.setBars(groups[0]); showSide(); paint(); } }, 'Ready'));
+      return;
+    }
     if (started) {
       title.textContent = barsLabel(groups[index]);
       fill(side,

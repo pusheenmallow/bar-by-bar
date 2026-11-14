@@ -8,7 +8,7 @@ import {
 import { drawBars } from '../images.js';
 import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
-import { stickOn, peelOff, fanfare } from '../sound.js';
+import { stickOn, fanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
 import { missing, speedControl, backTo } from './common.js';
 import { Hearing } from '../hear.js';
@@ -35,7 +35,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   let ending = false;            // the last clean is saving, or its panel is open
   let tempo = startTempo(piece, stage);
   const clock = await new PracticeClock({ piece, bars }).load();
-  clock.onGoal = () => { stickOn(); toast('That’s today’s time done. Finish what you’re on, or keep going.'); };
+  clock.onGoal = () => toast('That’s today’s time done. Finish what you’re on, or keep going.');
   const met = new Metronome();
   met.bpm = tempo;
   met.beats = piece.beats || 4;
@@ -116,9 +116,9 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
   const runLabel = h('p', { class: 'run-label' });
   function showTokens(change) {
     const forSolid = target >= MASTERY_RUN;
-    slots.setAttribute('aria-label', `${run.tokens} of ${target} clean in a row`);
+    slots.setAttribute('aria-label', `${run.tokens} of ${target} stickers`);
     slots.classList.toggle('long', forSolid);
-    runLabel.textContent = `${target} clean in a row${forSolid ? ' to make it solid' : ''}`;
+    runLabel.textContent = `${target} stickers ${forSolid ? 'to make it solid' : 'to colour it in'}`;
     while (slots.children.length < target) slots.append(h('span', { class: 'slot' }));
     [...slots.children].forEach((slot, i) => {
       slot.classList.toggle('after-good', forSolid && i === good);
@@ -129,7 +129,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
       if (filled && !has) {
         slot.append(h('span', { class: `sticker ${change === 'clean' ? 'slap' : ''}` }, sticker(52)));
       } else if (!filled && has) {
-        const s = slot.querySelector('.sticker');
+        const s = slot.querySelector('.sticker');           // it fades out where it is: no sound, nothing moves
         s.classList.add('peel');
         setTimeout(() => s.remove(), calm() ? 0 : 420);
       }
@@ -279,11 +279,11 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     if (mastered) {
       title = wasSolid ? 'Still solid!' : 'Solid!';
       line = wasSolid
-        ? `${stage.name}, ${target} clean in a row.`
-        : `${stage.name}, ${target} clean in a row. ${label} ${one ? 'is' : 'are'} solid now.`;
+        ? `${stage.name}, ${target} stickers.`
+        : `${stage.name}, ${target} stickers. ${label} ${one ? 'is' : 'are'} solid now.`;
     } else if (wasDone) {
       title = 'Still got it!';
-      line = `${stage.name}, ${target} clean in a row.`;
+      line = `${stage.name}, ${target} stickers.`;
     } else {
       title = `${stage.name} done!`;
       line = `${label} ${one ? 'is' : 'are'} coloured in.`;
@@ -366,7 +366,6 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
       slowNote = h('p', { class: 'kind' }, met.running ? `Let’s take it slower for a bit: ${slow.tempo}.` : 'Let’s take it slower for a bit.');
     }
     showTokens('slip');
-    peelOff();
     fill(coach, slowNote, h('div', { class: 'chips' },
       h('span', { class: 'coach-ask' }, 'What happened?'),
       reasons.map((m) => h('button', {

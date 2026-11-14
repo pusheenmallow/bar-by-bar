@@ -6,7 +6,8 @@ import { session } from '../session.js';
 
 const QUESTION = 'What are you working on?';
 
-// The choice before a practice: which stage, and how many clean in a row.
+// The choice before a practice: which stage, and how many stickers to go for.
+// A clean play adds a sticker and a slip takes one off, so it isn't a count "in a row".
 // Finished stages stay on the list, so a bar can be practised again at any time.
 export function practicePicker({ piece, bars, progress, stageId = null, back = null }) {
   const stages = practiceStages(piece);
@@ -24,7 +25,7 @@ export function practicePicker({ piece, bars, progress, stageId = null, back = n
   }
 
   const stagesEl = h('div', { class: 'stages pick-list', role: 'group', 'aria-label': QUESTION });
-  const goalEl = h('div', { class: 'goal-pick', role: 'group', 'aria-label': 'How many in a row?' });
+  const goalEl = h('div', { class: 'goal-pick', role: 'group', 'aria-label': 'How many stickers?' });
   const sayEl = h('p', { class: 'pick-say' });
 
   function checkRow() {
@@ -65,8 +66,8 @@ export function practicePicker({ piece, bars, progress, stageId = null, back = n
     h('span', { class: 'goal-name' }, name));
     goalEl.replaceChildren(option(good, 'Good'), option(MASTERY_RUN, 'Solid'));
     sayEl.textContent = goal === MASTERY_RUN
-      ? `${MASTERY_RUN} clean in a row makes it solid.`
-      : `${good} clean in a row colours it in.`;
+      ? `${MASTERY_RUN} stickers make it solid. A slip takes one off.`
+      : `${good} stickers colour it in. A slip takes one off.`;
   }
   draw();
 
@@ -76,7 +77,7 @@ export function practicePicker({ piece, bars, progress, stageId = null, back = n
       h('div', { class: 'pick-title' }, h('h2', {}, QUESTION), h('p', {}, barsLabel(bars))),
       h('button', { class: 'round', 'aria-label': 'Close', onClick: () => closeSheet() }, icon('close'))),
     stagesEl,
-    h('p', { class: 'pick-label' }, 'How many in a row?'),
+    h('p', { class: 'pick-label' }, 'How many stickers?'),
     goalEl,
     sayEl,
     h('button', {

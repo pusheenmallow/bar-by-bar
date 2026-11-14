@@ -177,9 +177,10 @@ export async function mapScreen([id], ctx, grownUp = false) {
     clockEl.classList.toggle('no-goal', !goal);
     fill(clockEl,
       goal ? h('span', { class: 'clock-track', 'aria-hidden': 'true' }, h('i', { class: 'clock-fill', style: { width: `${Math.min(100, (todaySeconds / goal) * 100)}%` } })) : null,
-      h('span', { class: 'clock-text' }, goal
-        ? `${timeText(todaySeconds)} of ${timeText(goal)} today`
-        : `${timeText(todaySeconds)} today`));
+      // Grown-ups get the minutes. The player gets the bar and, once it is full, a word.
+      h('span', { class: 'clock-text' }, parent
+        ? (goal ? `${timeText(todaySeconds)} of ${timeText(goal)} today` : `${timeText(todaySeconds)} today`)
+        : (reached ? 'Goal done' : '')));
   }
 
   const bannerEl = h('div', { class: 'banner-slot' });

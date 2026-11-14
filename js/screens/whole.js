@@ -5,7 +5,7 @@ import {
 } from '../model.js';
 import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
-import { stickOn, fanfare } from '../sound.js';
+import { fanfare } from '../sound.js';
 import { cssVar } from '../theme.js';
 import { missing, speedControl, backTo } from './common.js';
 import { scorePages, layer, hitPlace } from './score.js';
@@ -20,7 +20,7 @@ export async function whole([id], ctx) {
   if (!playable.length) return missing('This piece has no bars to play.');
 
   const clock = await new PracticeClock({ piece, bars: playable, mode: 'piece', limit: runLimit(piece, playable.length), keepOverLimit: true }).load();
-  clock.onGoal = () => { stickOn(); toast('That’s today’s time done.'); };
+  clock.onGoal = () => toast('That’s today’s time done.');
 
   let state = 'ready';            // ready, playing, marking
   let began = 0;

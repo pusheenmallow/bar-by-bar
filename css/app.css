@@ -501,12 +501,12 @@ audio.clip { display: none; }
 .sticker { position: absolute; inset: -1px; display: block; }
 .slot .sticker-art { width: 100%; height: 100%; }
 .sticker.slap { animation: slap .22s ease-out; }
-.sticker.peel { animation: peel .3s ease-in forwards; }
+.sticker.peel { animation: peel .3s ease-in forwards; }      /* a quiet fade, with no movement */
 .sticker-art { display: block; }
 .sticker-disc { fill: var(--gold); }
 .sticker-star { fill: var(--on-gold); }
 @keyframes slap { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-@keyframes peel { to { transform: scale(.7); opacity: 0; } }
+@keyframes peel { to { opacity: 0; } }
 .run-label { color: var(--ink-2); font-size: .85rem; }
 .answers { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
 .answer {

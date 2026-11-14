@@ -28,7 +28,6 @@ function note(freq, at, length, level, type = 'sine') {
 }
 
 export function stickOn() { if (!muted) { note(660, 0, 0.12, 0.25, 'triangle'); note(990, 0.05, 0.14, 0.2, 'triangle'); } }
-export function peelOff() { if (!muted) note(300, 0, 0.16, 0.14, 'triangle'); }
 export function fanfare() {
   if (muted) return;
   [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => note(f, i * 0.09, 0.42, 0.24, 'triangle'));

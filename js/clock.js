@@ -1,7 +1,7 @@
 // Counts active practice on a piece today. Time is only saved when something happens, such as
 // a Clean or Slip tap, so a tablet left on the music stand doesn't keep adding minutes.
 import { addTime, secondsOn, playerDays } from './store.js';
-import { dayKey, goalSeconds, practiceMode, clockText, QUICK_SECONDS } from './model.js';
+import { dayKey, goalSeconds, practiceMode, QUICK_SECONDS } from './model.js';
 import { session } from './session.js';
 import { h } from './ui.js';
 
@@ -41,8 +41,10 @@ export class PracticeClock {
   get idle() { return this.running && this.pending > this.limit; }
   get seconds() { return this.saved + (this.idle && !this.keepOverLimit ? 0 : Math.min(this.pending, this.limit)); }
 
-  beat() {
-    if (!this.goalDone && this.goal && this.seconds >= this.goal) {
+  // The bar fills as time passes, but reaching the goal is only announced at a tap, which is
+  // between plays. Nothing pops up or sounds while someone is in the middle of playing.
+  beat(atTap = false) {
+    if (atTap && !this.goalDone && this.goal && this.seconds >= this.goal) {
       this.goalDone = true;
       this.onGoal?.();
     }
@@ -54,11 +56,12 @@ export class PracticeClock {
     const waited = this.pending;
     const credit = waited > this.limit ? (this.keepOverLimit ? this.limit : 0) : waited;
     this.last = Date.now();
-    if (credit < 0.5) return;
-    this.saved += credit;
-    const mode = this.mode || practiceMode(this.bars.length);
-    addTime(this.pieceId, dayKey(Date.now()), mode, this.bars.map((b) => b.id), credit);
-    this.beat();
+    if (credit >= 0.5) {
+      this.saved += credit;
+      const mode = this.mode || practiceMode(this.bars.length);
+      addTime(this.pieceId, dayKey(Date.now()), mode, this.bars.map((b) => b.id), credit);
+    }
+    this.beat(true);
   }
 
   touch() {
@@ -119,6 +122,7 @@ export function stayAwake(clock, metronome) {
   };
 }
 
+// What the player sees of the clock: a bar that fills, and a word. No minutes and no countdown.
 export function clockView(clock) {
   const fill = h('i', { class: 'clock-fill' });
   const text = h('span', { class: 'clock-text' });
@@ -130,9 +134,7 @@ export function clockView(clock) {
     el.classList.toggle('reached', goal > 0 && seconds >= goal);
     el.classList.toggle('no-goal', !goal);
     if (clock.idle && !clock.keepOverLimit) text.textContent = 'Paused';
-    else if (!goal) text.textContent = `${clockText(seconds)} today`;
-    else if (seconds < goal) text.textContent = `${clockText(goal - seconds)} to go`;
-    else text.textContent = 'Goal done';
+    else text.textContent = goal && seconds >= goal ? 'Goal done' : '';
   };
   clock.onChange = show;
   show();

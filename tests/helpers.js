@@ -67,6 +67,8 @@ export async function typePin(page, digits = PIN) {
 // Into Grown-ups. The first visit chooses the PIN, later visits enter it.
 // Grown-ups locks again whenever the app leaves its screens, so only a move inside it skips the PIN.
 export async function openGrownUps(page, path = '/parent') {
+  // After a reload the screen takes a moment to draw, so wait for it before looking for the keypad.
+  if (page.url().startsWith('http')) await page.locator('#app > main').waitFor().catch(() => {});
   const inside = await page.evaluate(() => location.hash.startsWith('#/parent') && !document.querySelector('.keypad')).catch(() => false);
   await page.goto(`/#${path}`);
   if (inside) return;

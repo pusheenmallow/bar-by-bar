@@ -3,7 +3,9 @@
 // new and what is pinned. The schedule still decides the pace and the checks.
 import { h, goUp, toast } from '../ui.js';
 import { get, currentAssignment, saveAssignment } from '../store.js';
-import { blankAssignment, parseBarNumbers, playableBars, practiceStages, numberRanges, dayKey } from '../model.js';
+import {
+  blankAssignment, parseBarNumbers, playableBars, practiceStages, numberRanges, dayKey, assignmentEnvelope, readAssignmentEnvelope,
+} from '../model.js';
 import { session } from '../session.js';
 import { field, stepper, missing, backTo, doneButton, learnerTabs } from './common.js';
 import { gate } from './parent.js';
@@ -15,6 +17,10 @@ export async function assign([id], ctx) {
   const person = await get('players', piece.playerId);
   const existing = await currentAssignment(id);
   const a = existing ? { ...existing } : blankAssignment(piece);
+  // An assignment loaded from a file fills the form. It isn't saved until Save is tapped.
+  const loaded = session.loadedAssignment?.pieceId === id ? session.loadedAssignment : null;
+  session.loadedAssignment = null;
+  if (loaded) Object.assign(a, loaded.fields);
   const stages = practiceStages(piece);
   const numbers = playableBars(piece).map((b) => b.n);
   const tabs = await learnerTabs(piece, (other) => `/parent/assign/${other}`);
@@ -48,6 +54,31 @@ export async function assign([id], ctx) {
     goUp(`/parent/piece/${id}`);
   }
 
+  // As a file, to hand to another tablet. It holds bar numbers and settings, and no names.
+  function toFile() {
+    const blob = new Blob([JSON.stringify(assignmentEnvelope(piece, a), null, 2)], { type: 'application/json' });
+    const link = h('a', { href: URL.createObjectURL(blob), download: `bar-by-bar-assignment-${dayKey(Date.now())}.json` });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    toast('Assignment saved to Downloads.');
+  }
+
+  async function fromFile(e) {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      let data;
+      try { data = JSON.parse(await file.text()); } catch { throw new Error('That file is not a Bar by Bar assignment.'); }
+      session.loadedAssignment = { pieceId: id, ...readAssignmentEnvelope(data, piece) };
+      ctx.rerender();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+  const picker = h('input', { type: 'file', accept: 'application/json,.json', hidden: true, 'aria-label': 'Assignment file', onChange: fromFile });
+
   return h('main', { class: 'screen form' },
     h('header', { class: 'bar-top' },
       backTo('Piece settings', `/parent/piece/${id}`),
@@ -55,6 +86,8 @@ export async function assign([id], ctx) {
       doneButton()),
     tabs,
     h('p', { class: 'lead' }, `${piece.title}${person ? `, for ${person.name}` : ''}`),
+    loaded && h('div', { class: 'banner loaded', role: 'status' },
+      h('span', {}, ['Loaded from the file. Check it, then tap Save assignment.', ...loaded.warnings].join(' '))),
 
     h('section', { class: 'block' },
       h('h2', {}, 'What to practise'),
@@ -100,5 +133,13 @@ export async function assign([id], ctx) {
 
     h('div', { class: 'row-buttons left' },
       h('button', { class: 'btn primary', onClick: save }, 'Save assignment'),
-      existing && h('button', { class: 'btn', onClick: clear }, 'Clear assignment')));
+      existing && h('button', { class: 'btn', onClick: clear }, 'Clear assignment')),
+
+    h('section', { class: 'block' },
+      h('h2', {}, 'Pass it on'),
+      h('p', { class: 'field-hint' }, 'Save what is in this form as a small file, or load one a teacher sent. The file holds bar numbers and settings only: no names, no music and no progress.'),
+      h('div', { class: 'row-buttons left' },
+        h('button', { class: 'btn', onClick: toFile }, 'Save as a file'),
+        h('button', { class: 'btn', onClick: () => picker.click() }, 'Load from a file'),
+        picker)));
 }

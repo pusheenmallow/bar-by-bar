@@ -324,6 +324,55 @@ export function activePins(piece, assignment, now = Date.now()) {
   return new Set(barsNumbered(piece, assignment.pins).map((b) => b.id).filter((id) => !cleared.has(id)));
 }
 
+// An assignment as a small file, to pass between tablets by hand: a teacher's to a family's, or
+// one learner's to another's. It carries bar numbers and settings only. No names, no ids, no
+// score and no progress.
+export const ENVELOPE_VERSION = 1;
+
+export function assignmentEnvelope(piece, a, now = Date.now()) {
+  return {
+    app: 'bar-by-bar', kind: 'assignment', envelopeVersion: ENVELOPE_VERSION, savedAt: new Date(now).toISOString(),
+    piece: { title: piece.title, bars: playableBars(piece).length },
+    assignment: {
+      bars: a.bars || '', pins: a.pins || '', stageId: a.stageId || null,
+      stageName: practiceStages(piece).find((s) => s.id === a.stageId)?.name || null,
+      tempo: a.tempo ?? null, lessonDate: a.lessonDate || '', minutes: a.minutes ?? null, note: a.note || '',
+    },
+  };
+}
+
+// Reads such a file for this piece. Gives the fields to put in the form, and anything worth a
+// second look. Throws, in plain words, for a file that isn't one.
+export function readAssignmentEnvelope(data, piece, now = Date.now()) {
+  if (data?.app === 'bar-by-bar' && data.backupVersion) throw new Error('That is a backup file, not an assignment. Backups are restored from Grown-ups.');
+  if (data?.app !== 'bar-by-bar' || data.kind !== 'assignment' || !data.assignment || !Number.isInteger(data.envelopeVersion)) {
+    throw new Error('That file is not a Bar by Bar assignment.');
+  }
+  if (data.envelopeVersion > ENVELOPE_VERSION) throw new Error('That assignment is from a newer version of Bar by Bar. Update the app, then load it.');
+  const from = data.assignment;
+  const text = (v, max) => String(v ?? '').slice(0, max);
+  const number = (v, low, high, fallback) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Math.min(high, Math.max(low, Math.round(Number(v)))) : fallback);
+  const stages = practiceStages(piece);
+  const warnings = [];
+  const stage = stages.find((s) => s.id === from.stageId)
+    || stages.find((s) => from.stageName && s.name.toLowerCase() === String(from.stageName).toLowerCase());
+  if (!stage && (from.stageName || from.stageId)) warnings.push(`“${from.stageName || from.stageId}” isn’t a stage of this piece, so new bars go as far as ${stages.at(-1)?.name}.`);
+  const there = data.piece || {};
+  if (there.title && there.title !== piece.title) warnings.push(`It was written for “${text(there.title, 80)}”.`);
+  const here = playableBars(piece).length;
+  if (Number.isInteger(there.bars) && there.bars !== here) warnings.push(`It was written for a piece of ${there.bars} bars. This one has ${here}.`);
+  const lessonDate = /^\d{4}-\d{2}-\d{2}$/.test(from.lessonDate || '') ? from.lessonDate : '';
+  if (lessonDate && lessonDate < dayKey(now)) warnings.push('The lesson date in it has passed.');
+  return {
+    fields: {
+      bars: text(from.bars, 200), pins: text(from.pins, 200), pinsDone: [], stageId: (stage || stages.at(-1))?.id ?? null,
+      tempo: number(from.tempo, 30, 240, piece.tempo), lessonDate, minutes: number(from.minutes, 5, 60, DEFAULT_SESSION_MINUTES),
+      note: text(from.note, 160),
+    },
+    warnings,
+  };
+}
+
 export function waitingForCheck(piece, bar, prog, now = Date.now(), saved = null) {
   const entry = scheduleOf(piece, bar, prog, saved);
   if (!entry || !entry.dueDay) return false;

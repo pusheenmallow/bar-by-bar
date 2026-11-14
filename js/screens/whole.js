@@ -1,7 +1,7 @@
 import { h, goUp, icon, sticker, sheet, toast, softly } from '../ui.js';
-import { get, put, progressMap, addAttempt } from '../store.js';
+import { get, put, progressMap, scheduleMap, addAttempt } from '../store.js';
 import {
-  listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges,
+  listBars, playableBars, slowTempo, clampTempo, runLimit, clockText, blankProgress, numberRanges, scheduleOf, afterRunSlip, dayKey,
 } from '../model.js';
 import { Metronome } from '../metronome.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
@@ -149,6 +149,12 @@ export async function whole([id], ctx) {
       p.lastPractised = Date.now();
       await put('progress', p);
       progress.set(b.id, p);
+    }
+    // A bar that slipped in the run comes back for a check tomorrow. Nothing the player sees changes.
+    const schedule = await scheduleMap(id);
+    for (const b of list) {
+      const entry = scheduleOf(piece, b, progress.get(b.id), schedule.get(b.id));
+      if (entry) await put('schedule', afterRunSlip(entry, dayKey(Date.now())));
     }
     piece.runTempo = tempo;
     await put('pieces', piece);

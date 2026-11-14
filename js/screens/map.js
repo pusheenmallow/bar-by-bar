@@ -1,5 +1,5 @@
 import { h, go, fill, icon, sticker, crown, sheet, closeSheet, replaceSheet } from '../ui.js';
-import { get, put, progressMap, timeDocs, dayTotal, timeSaved } from '../store.js';
+import { get, put, progressMap, scheduleMap, timeDocs, dayTotal, timeSaved } from '../store.js';
 import {
   penVar, listBars, playableBars, blankProgress, checkStatus, waitingForCheck, checkGroups, topStage,
   solidStages, hasGold, barStep, barsLabel, dayKey, newId, goalSeconds, timeText, clockText, numberRanges,
@@ -22,6 +22,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
   if (!piece) return missing('That piece has gone.');
   await timeSaved();
   let progress = await progressMap(id);
+  const schedule = await scheduleMap(id);
   const docs = await timeDocs(id);
   const bars = listBars(piece);
   const playable = playableBars(piece);
@@ -101,7 +102,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
     view.hits.replaceChildren(...view.bars.map((bar) => {
       const prog = progress.get(bar.id);
       const reached = topStage(piece, prog);
-      const waiting = waitingForCheck(piece, bar, prog);
+      const waiting = waitingForCheck(piece, bar, prog, Date.now(), schedule.get(bar.id));
       const gold = hasGold(piece, prog);
       const fresh = gold && session.freshGold.has(`${id}|${bar.id}`);
       const seconds = barTime.get(bar.id) || 0;
@@ -185,7 +186,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
 
   const bannerEl = h('div', { class: 'banner-slot' });
   function banner() {
-    const count = checkGroups(piece, progress).flat().length;
+    const count = checkGroups(piece, progress, Date.now(), 4, schedule).flat().length;
     const slipped = playable.filter((b) => progress.get(b.id)?.runSlip);
     const nudge = goal && todaySeconds >= goal * 0.7 && !(today?.modes.piece > 0) && playable.length > 2;
     let content = [];
@@ -296,7 +297,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
       return h('div', { class: 'stage-row' },
         h('span', { class: 'swatch', style: { background: penVar(s.pen) } }),
         h('span', { class: 'stage-name' }, s.name),
-        h('span', { class: 'stage-status' }, isCheck && !p.done[s.id] ? checkStatus(piece, bar, progress.get(bar.id)) : ''),
+        h('span', { class: 'stage-status' }, isCheck && !p.done[s.id] ? checkStatus(piece, bar, progress.get(bar.id), Date.now(), schedule.get(bar.id)) : ''),
         !isCheck && h('button', {
           class: `solid-toggle ${p.crowns?.[s.id] ? 'on' : ''}`,
           'aria-label': `Solid for ${s.name} on this bar`,

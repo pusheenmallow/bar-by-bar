@@ -227,29 +227,116 @@ export function barStep(piece, prog) {
   return prog.crowns?.[top.id] ? 'solid' : 'good';
 }
 
-export function waitingForCheck(piece, bar, prog, now = Date.now()) {
+/* ---------- the schedule ---------- */
+// Once a bar has finished its last practice stage it comes back for a check play on later days,
+// at growing gaps. A clean check moves it up the ladder, a slip brings it back tomorrow. The
+// player never sees any of this: no dates, no steps, and nothing that goes down.
+
+export const LADDER = [0, 1, 2, 4, 7, 14];           // days until the next check, by step
+export const EASY_WARM_UPS = 2;                      // a clean check after more warm-ups than this repeats its gap
+export const REVIEW_CAP = 8;                         // the most check stops in one session
+
+const dayNoon = (day) => { const [y, m, d] = day.split('-').map(Number); return new Date(y, m - 1, d, 12); };
+export const addDays = (day, n) => { const d = dayNoon(day); d.setDate(d.getDate() + n); return dayKey(d.getTime()); };
+const dayGap = (from, to) => Math.round((dayNoon(to) - dayNoon(from)) / 86400000);
+
+export const blankSchedule = (pieceId, barId) => ({
+  key: `${pieceId}|${barId}`, pieceId, barId, step: 1, dueDay: null, lastDay: null, lapses: 0, kept: false, shortNext: false,
+});
+
+// A bar's place on the ladder. `saved` is its record in the schedule store, if it has one yet.
+// Without one it is worked out from progress, so bars learned before the schedule existed join it
+// with nothing to convert: a bar waiting for its first check is due the day after it was learned,
+// and a bar that already has its gold crown comes back two days after it was won.
+export function scheduleOf(piece, bar, prog, saved = null) {
+  if (saved) return saved;
   const check = checkStage(piece);
-  if (!check || !prog || bar.skip || prog.done[check.id]) return false;
-  const stages = practiceStages(piece);
-  const last = stages[stages.length - 1];
-  if (!last) return false;
-  const when = prog.done[last.id];
-  if (!when) return false;
-  const today = dayKey(now);
-  return dayKey(when) < today && prog.lastCheck !== today;
+  const last = practiceStages(piece).at(-1);
+  if (!check || !last || !prog || bar.skip || !prog.done[last.id]) return null;
+  const blank = blankSchedule(piece.id, bar.id);
+  if (prog.done[check.id]) {
+    const won = dayKey(prog.done[check.id]);
+    return { ...blank, step: 2, kept: true, lastDay: won, dueDay: addDays(won, LADDER[2]) };
+  }
+  return { ...blank, lastDay: prog.lastCheck || null, dueDay: addDays(dayKey(prog.done[last.id]), 1) };
 }
 
-export function checkStatus(piece, bar, prog, now = Date.now()) {
-  if (waitingForCheck(piece, bar, prog, now)) return 'Ready now';
+// With a lesson or exam coming, no gap is longer than half the days left, so everything is seen
+// at least twice before the date.
+export function squeezeGap(gap, today, lessonDay) {
+  if (!lessonDay || lessonDay <= today) return gap;
+  return Math.min(gap, Math.max(1, Math.floor(dayGap(today, lessonDay) / 2)));
+}
+
+// The result of one check play. A tablet with the wrong date never sends things backwards:
+// a check can't count as earlier than the one before it.
+export function afterReview(entry, { clean, warmUps = 0, today, lessonDay = null }) {
+  const day = entry.lastDay && today < entry.lastDay ? entry.lastDay : today;
+  if (!clean) {
+    return { ...entry, step: Math.max(1, entry.step - 1), lapses: entry.lapses + 1, shortNext: true, lastDay: day, dueDay: addDays(day, 1) };
+  }
+  const step = warmUps <= EASY_WARM_UPS ? Math.min(LADDER.length - 1, entry.step + 1) : entry.step;
+  // After a slip the following gap is shortened once.
+  const gap = entry.shortNext ? LADDER[Math.max(1, step - 1)] : LADDER[step];
+  return { ...entry, step, kept: true, shortNext: false, lastDay: day, dueDay: addDays(day, squeezeGap(gap, day, lessonDay)) };
+}
+
+// A bar marked as slipped in a whole-piece play comes back tomorrow, one step down.
+export function afterRunSlip(entry, today) {
+  const tomorrow = addDays(today, 1);
+  return { ...entry, step: Math.max(1, entry.step - 1), dueDay: entry.dueDay && entry.dueDay < tomorrow ? entry.dueDay : tomorrow };
+}
+
+export function waitingForCheck(piece, bar, prog, now = Date.now(), saved = null) {
+  const entry = scheduleOf(piece, bar, prog, saved);
+  if (!entry || !entry.dueDay) return false;
+  const today = dayKey(now);
+  return entry.dueDay <= today && entry.lastDay !== today;
+}
+
+export function checkStatus(piece, bar, prog, now = Date.now(), saved = null) {
+  if (waitingForCheck(piece, bar, prog, now, saved)) return 'Ready now';
   return prog?.lastCheck === dayKey(now) ? 'Try again tomorrow' : 'After full speed';
 }
 
-export function checkGroups(piece, progress, now = Date.now(), size = 4) {
+// Today's check stops for a session: bars that are due, and any pinned bars, in groups of
+// neighbours. When there are more than the cap, the ones kept are pinned first, then the most
+// overdue for their gap, then the ones missed most often. They come back in score order.
+export function reviewGroups(piece, progress, schedule, { now = Date.now(), pinned = new Set(), cap = REVIEW_CAP, size = 4 } = {}) {
+  const today = dayKey(now);
+  const groups = [];
+  let cur = [];
+  const flush = () => { if (cur.length) groups.push(cur); cur = []; };
+  const entryOf = (bar) => scheduleOf(piece, bar, progress.get(bar.id), schedule.get(bar.id));
+  playableBars(piece).forEach((bar) => {
+    const entry = entryOf(bar);
+    const pin = pinned.has(bar.id) && entry && entry.lastDay !== today;
+    if (pin || waitingForCheck(piece, bar, progress.get(bar.id), now, schedule.get(bar.id))) {
+      cur.push(bar);
+      if (cur.length === size) flush();
+    } else flush();
+  });
+  flush();
+  if (groups.length <= cap) return groups;
+  const rank = (group) => {
+    const entries = group.map(entryOf);
+    return {
+      pin: group.some((b) => pinned.has(b.id)) ? 1 : 0,
+      late: Math.max(...entries.map((e) => dayGap(e.dueDay, today) / Math.max(1, LADDER[e.step]))),
+      lapses: Math.max(...entries.map((e) => e.lapses)),
+    };
+  };
+  const ranked = groups.map((group, i) => ({ group, i, ...rank(group) }))
+    .sort((a, b) => b.pin - a.pin || b.late - a.late || b.lapses - a.lapses || a.i - b.i);
+  return ranked.slice(0, cap).sort((a, b) => a.i - b.i).map((r) => r.group);
+}
+
+export function checkGroups(piece, progress, now = Date.now(), size = 4, schedule = new Map()) {
   const groups = [];
   let cur = [];
   const flush = () => { if (cur.length) groups.push(cur); cur = []; };
   for (const bar of playableBars(piece)) {
-    if (waitingForCheck(piece, bar, progress.get(bar.id), now)) {
+    if (waitingForCheck(piece, bar, progress.get(bar.id), now, schedule.get(bar.id))) {
       cur.push(bar);
       if (cur.length === size) flush();
     } else flush();
@@ -343,8 +430,8 @@ export function warmUpBar(piece, progress, checking) {
 }
 
 // Where a Quick practice starts on a piece: what is waiting, then what slipped, then what comes next.
-export function quickPath(piece, progress, now = Date.now()) {
-  if (checkStage(piece) && checkGroups(piece, progress, now).length) return `/check/${piece.id}`;
+export function quickPath(piece, progress, now = Date.now(), schedule = new Map()) {
+  if (checkStage(piece) && checkGroups(piece, progress, now, 4, schedule).length) return `/check/${piece.id}`;
   const bars = playableBars(piece);
   const unfinished = (b) => nextForBars(piece, [b], progress);
   const bar = bars.find((b) => progress.get(b.id)?.runSlip)

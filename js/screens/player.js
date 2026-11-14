@@ -1,5 +1,5 @@
 import { h, go } from '../ui.js';
-import { get, byIndex, progressMap, playerDays } from '../store.js';
+import { get, byIndex, progressMap, scheduleMap, playerDays } from '../store.js';
 import { penVar, playableBars, topStage, checkGroups, weekSummary, weekTarget, quickPath } from '../model.js';
 import { session } from '../session.js';
 import { missing, backTo, grownUpsButton } from './common.js';
@@ -31,9 +31,10 @@ export async function player([id]) {
     const progress = await progressMap(piece.id);
     const bars = playableBars(piece);
     const started = bars.filter((b) => topStage(piece, progress.get(b.id))).length;
-    const checks = checkGroups(piece, progress).flat().length;
+    const schedule = await scheduleMap(piece.id);
+    const checks = checkGroups(piece, progress, Date.now(), 4, schedule).flat().length;
     const last = Math.max(0, ...[...progress.values()].map((p) => p.lastPractised || 0));
-    if (bars.length && (!latest || last > latest.last)) latest = { piece, progress, last };
+    if (bars.length && (!latest || last > latest.last)) latest = { piece, progress, schedule, last };
     rows.push(h('button', { class: 'piece-row', onClick: () => go(`/piece/${piece.id}`) },
       h('span', { class: 'piece-title' }, piece.title),
       strip(piece, bars, progress),
@@ -45,7 +46,7 @@ export async function player([id]) {
   // Always there beside the pieces: five minutes on whatever is most useful. A short day beats a skipped one.
   const quick = latest && h('button', {
     class: 'btn quick',
-    onClick: () => { session.quick = id; go(quickPath(latest.piece, latest.progress)); },
+    onClick: () => { session.quick = id; go(quickPath(latest.piece, latest.progress, Date.now(), latest.schedule)); },
   }, 'Quick practice', h('span', { class: 'quick-sub' }, '5 minutes'));
 
   return h('main', { class: 'screen player', vars: { pen: penVar(person.pen) } },

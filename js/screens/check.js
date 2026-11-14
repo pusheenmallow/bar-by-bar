@@ -1,9 +1,9 @@
 import { h, fill, goUp, softly, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
-import { get, put, progressMap, addAttempt, playerDays } from '../store.js';
+import { get, put, byIndex, progressMap, scheduleMap, currentAssignment, addAttempt, playerDays } from '../store.js';
 import { session } from '../session.js';
 import {
-  checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress, shuffle, seededRandom, withFirst,
-  shortReturn, warmUpBar, RETURN_STOPS,
+  reviewGroups, scheduleOf, afterReview, checkStage, barsLabel, dayKey, mistakeList, blankProgress, shuffle, seededRandom, withFirst,
+  shortReturn, warmUpBar, RETURN_STOPS, REVIEW_CAP,
 } from '../model.js';
 import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
@@ -20,8 +20,13 @@ export async function check([id], ctx) {
   // Back after a few days away, the first session is a short one: a warm-up and a few checks.
   // The rest stay ready for next time, and nothing is said about the gap.
   const back = shortReturn(await playerDays(piece.playerId));
-  const waiting = checkGroups(piece, progress);
-  const inScoreOrder = back ? waiting.slice(0, RETURN_STOPS) : waiting;
+  const schedule = await scheduleMap(id);
+  const assignment = await currentAssignment(id);
+  const today = dayKey(Date.now());
+  const earlier = (await byIndex('attempts', 'pieceId', id)).filter((a) => (a.day || dayKey(a.at)) === today);
+  // Opening the check is the "Ready" tap. Plays made on a bar earlier today were its warm-ups.
+  const warmUpsOn = (bar) => earlier.filter((a) => a.barIds.includes(bar.id)).length;
+  const inScoreOrder = reviewGroups(piece, progress, schedule, { cap: back ? RETURN_STOPS : REVIEW_CAP });
   let warmUp = back && stage ? warmUpBar(piece, progress, inScoreOrder) : null;
   // Mixed up, so the bars aren't always met in the order they come in the music.
   let groups = shuffle(inScoreOrder, session.shuffleSeed == null ? Math.random : seededRandom(session.shuffleSeed));
@@ -52,9 +57,16 @@ export async function check([id], ctx) {
     const p = progress.get(bar.id) || blankProgress(id, bar.id);
     p.lastCheck = dayKey(Date.now());
     if (ok && !p.done[stage.id]) session.freshGold.add(`${id}|${bar.id}`);       // its first gold crown
-    if (ok) p.done[stage.id] = Date.now();
+    // Where the bar goes on the ladder is worked out before the pass is written, from how it stood.
+    const entry = scheduleOf(piece, bar, progress.get(bar.id), schedule.get(bar.id));
+    if (ok) p.done[stage.id] ||= Date.now();                  // the gold crown keeps the day it was first won
     await put('progress', p);
     progress.set(bar.id, p);
+    if (entry) {
+      const next = afterReview(entry, { clean: ok, warmUps: warmUpsOn(bar), today: dayKey(Date.now()), lessonDay: assignment?.lessonDate || null });
+      await put('schedule', next);
+      schedule.set(bar.id, next);
+    }
     if (ok) passed += 1; else again.push(bar);
   };
 

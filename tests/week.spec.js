@@ -207,10 +207,11 @@ test('after three days away the first session is short: a warm-up and four check
   await showPlayer(page, seeded.players.Pip);
   await expect(filled(page)).toHaveCount(2);                   // Tuesday, and today for finishing the short session
 
-  // The other two are still ready, and now that today has practice in it, it's an ordinary session again.
+  // The others are still ready, and now that today has practice in it, it's an ordinary session again.
+  // Bar 12 has had its gold crown for six days, so it is due to be checked again too.
   await page.goto(`/#/check/${pieceId}`);
   await expect(page.getByRole('heading', { name: 'Warm-up' })).toHaveCount(0);
-  await expect(page.getByRole('group', { name: 'Which one first?' }).getByRole('button')).toHaveText(['Bar 9', 'Bar 11']);
+  await expect(page.getByRole('group', { name: 'Which one first?' }).getByRole('button')).toHaveText(['Bar 9', 'Bars 11 to 12']);
 });
 
 test('after two days away it is an ordinary session, with every check and no warm-up', async ({ page }) => {

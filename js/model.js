@@ -465,6 +465,77 @@ export function warmUpBar(piece, progress, checking) {
     || null;
 }
 
+/* ---------- the week, for the teacher ---------- */
+// Three things a teacher wants before a lesson: did they practise, what moved and what is
+// stuck, and how the play-through is going. The week is the seven days ending today.
+
+export const STUCK_LAPSES = 3;
+
+export function teacherSummary({
+  piece, person = null, progress, schedule = new Map(), attempts = [], seconds = new Map(), days = new Map(),
+  target = DEFAULT_WEEK_TARGET, assignment = null, takes = [], now = Date.now(),
+}) {
+  const today = dayKey(now);
+  const first = addDays(today, -6);
+  const inWeek = (day) => day >= first && day <= today;
+  const lastWeek = (day) => day >= addDays(first, -7) && day < first;
+  const dayOf = (when) => dayKey(when);
+  const bars = playableBars(piece);
+  const numbers = (list) => numberRanges(list.map((b) => b.n).sort((a, b) => a - b));
+  const barWord = (list) => (list.length === 1 ? 'Bar' : 'Bars');
+  const lastStage = practiceStages(piece).at(-1);
+  const check = checkStage(piece);
+  const date = (day) => dayNoon(day).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+
+  const week = [...Array(7)].map((_, i) => addDays(first, i));
+  const practised = week.filter((day) => dayCounts(days.get(day))).length;
+  const spent = week.reduce((sum, day) => sum + (seconds.get(day) || 0), 0);
+
+  const learned = bars.filter((b) => lastStage && progress.get(b.id)?.done[lastStage.id] && inWeek(dayOf(progress.get(b.id).done[lastStage.id])));
+  const gold = bars.filter((b) => check && progress.get(b.id)?.done[check.id] && inWeek(dayOf(progress.get(b.id).done[check.id])));
+  const checks = attempts.filter((a) => a.source === 'check' && inWeek(a.day || dayOf(a.at)));
+  const idsOf = (result) => new Set(checks.filter((a) => a.result === result).flatMap((a) => a.barIds));
+  const slippedIds = idsOf('slip');
+  const cleanIds = idsOf('clean');
+  const slipped = bars.filter((b) => slippedIds.has(b.id));
+  const clean = bars.filter((b) => cleanIds.has(b.id) && !slippedIds.has(b.id));
+  const stuck = bars.filter((b) => (schedule.get(b.id)?.lapses || 0) >= STUCK_LAPSES);
+  const pinned = bars.filter((b) => activePins(piece, assignment, now).has(b.id));
+
+  const runs = attempts.filter((a) => a.source === 'whole');
+  const speed = (list) => Math.max(0, ...list.filter((a) => a.metronomeOn && a.tempoSet).map((a) => a.tempoSet)) || null;
+  const thisRuns = runs.filter((a) => inWeek(a.day || dayOf(a.at)));
+  const now_ = speed(thisRuns), before = speed(runs.filter((a) => lastWeek(a.day || dayOf(a.at))));
+  const recorded = takes.filter((t) => inWeek(t.day)).length;
+
+  const lines = [];
+  const add = (label, text) => lines.push({ label, text });
+  add('Practice', `${practised} of ${target} ${target === 1 ? 'day' : 'days'}, ${timeText(spent)} on this piece`);
+  if (learned.length) add('Learned this week', `${barWord(learned)} ${numbers(learned)}`);
+  if (gold.length) add('Still clean on a later day, for the first time', `${barWord(gold)} ${numbers(gold)}`);
+  if (checks.length) {
+    add('Checks', [
+      clean.length ? `${clean.length} ${clean.length === 1 ? 'bar' : 'bars'} clean` : '',
+      slipped.length ? `${barWord(slipped).toLowerCase()} ${numbers(slipped)} slipped` : '',
+    ].filter(Boolean).join(', '));
+  }
+  if (stuck.length) add(`Stuck (missed ${STUCK_LAPSES} or more checks)`, `${barWord(stuck)} ${numbers(stuck)}`);
+  if (pinned.length) add('Still pinned', `${barWord(pinned)} ${numbers(pinned)}`);
+  if (thisRuns.length) {
+    const plays = `${thisRuns.length} ${thisRuns.length === 1 ? 'play' : 'plays'}`;
+    add('Play-through', now_ ? `♩ = ${now_}${before ? ` (last week ${before})` : ''}, ${plays}` : `${plays}, without the metronome`);
+  }
+  if (recorded) add('Recordings made', `${recorded}, on the tablet`);
+  if (lines.length === 1 && !practised && !spent) lines[0].text = 'No practice on this piece this week';
+  return {
+    title: piece.title,
+    sub: `${person?.name ? `${person.name}, ` : ''}${date(first)} to ${date(today)}`,
+    lines, practised, target, seconds: spent,
+    learned: learned.map((b) => b.n), gold: gold.map((b) => b.n), clean: clean.map((b) => b.n), slipped: slipped.map((b) => b.n),
+    stuck: stuck.map((b) => b.n), pinned: pinned.map((b) => b.n), runTempo: now_, runTempoBefore: before, runs: thisRuns.length, recorded,
+  };
+}
+
 /* ---------- the learner's own recordings ---------- */
 
 export const THEN_AFTER_DAYS = 21;            // "then and now" needs a first recording at least this much older

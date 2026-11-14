@@ -197,6 +197,13 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 .btn.quick { display: inline-flex; align-items: baseline; gap: 8px; }
 .session-buttons { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
+/* ---------- the week, for the teacher ---------- */
+.summary-lines { display: grid; grid-template-columns: minmax(180px, 280px) 1fr; gap: 8px 18px; width: 100%; margin: 0; }
+.summary-lines dt { color: var(--ink-2); }
+.summary-lines dd { margin: 0; }
+.summary-preview { width: 100%; max-width: 420px; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.summary-card { display: block; width: 100%; height: auto; }
+
 /* ---------- the learner's own recordings ---------- */
 .start-row { display: flex; align-items: stretch; gap: 12px; flex-wrap: wrap; }
 .start-row .answer { flex: 1 1 240px; }

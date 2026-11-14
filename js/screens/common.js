@@ -12,6 +12,12 @@ export function sessionHome(pieceId) {
     : { inSession: false, path: `/piece/${pieceId}`, back: 'My piece', done: 'Back to my piece' };
 }
 
+// Where the staff screens (assignment, summary, recordings) go back to. Grown-ups come from a
+// piece's settings; the teacher, who has no settings, from the Teacher screen.
+export const areaHome = (area, pieceId) => (area === 'teacher'
+  ? { back: 'Teacher', path: '/teacher' }
+  : { back: 'Piece settings', path: `/parent/piece/${pieceId}` });
+
 export const missing = (text) => h('main', { class: 'screen' },
   h('p', { class: 'lead' }, text),
   h('button', { class: 'btn', onClick: () => go('/') }, 'Back to the start'));

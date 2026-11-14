@@ -15,6 +15,7 @@ import { recordingScreen } from './screens/recording.js';
 import { assign } from './screens/assign.js';
 import { today } from './screens/today.js';
 import { takes } from './screens/takes.js';
+import { summaryScreen } from './screens/summary.js';
 import { session } from './session.js';
 import { setUpgradeGate } from './store.js';
 import { upgradeGate, upgradeFailed } from './upgrade.js';
@@ -41,6 +42,7 @@ const routes = [
   [/^\/parent\/stats\/([^/]+)$/, (args, ctx) => stats(args, ctx, true)],
   [/^\/parent\/recording\/([^/]+)$/, recordingScreen],
   [/^\/parent\/assign\/([^/]+)$/, assign],
+  [/^\/parent\/summary\/([^/]+)$/, summaryScreen],
 ];
 
 const app = document.getElementById('app');

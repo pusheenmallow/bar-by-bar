@@ -1,7 +1,7 @@
-import { h, goUp, softly, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
+import { h, fill, goUp, softly, sheet, closeSheet, replaceSheet, sticker } from '../ui.js';
 import { get, put, progressMap, addAttempt } from '../store.js';
 import { session } from '../session.js';
-import { checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress } from '../model.js';
+import { checkGroups, checkStage, barsLabel, dayKey, mistakeList, blankProgress, shuffle, seededRandom, withFirst } from '../model.js';
 import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
 import { PracticeClock, clockView, stayAwake } from '../clock.js';
@@ -14,7 +14,10 @@ export async function check([id], ctx) {
   if (!piece) return missing('That piece has gone.');
   const progress = await progressMap(id);
   const stage = checkStage(piece);
-  const groups = checkGroups(piece, progress);
+  const inScoreOrder = checkGroups(piece, progress);
+  // Mixed up, so the bars aren't always met in the order they come in the music.
+  let groups = shuffle(inScoreOrder, session.shuffleSeed == null ? Math.random : seededRandom(session.shuffleSeed));
+  let started = groups.length < 2;          // with more than one, the player picks where to start
   if (!stage || !groups.length) {
     return h('main', { class: 'screen' },
       h('p', { class: 'lead' }, 'Nothing is ready for a next-day check yet.'),
@@ -31,6 +34,7 @@ export async function check([id], ctx) {
   let spots = [];
 
   async function paint() {
+    if (!started) return;
     const box = { width: cropBox.clientWidth - 8, height: cropBox.clientHeight - 8 };
     if (box.width < 40 || box.height < 40) return;
     spots = (await drawBars(crop, groups[index], box)).spots;
@@ -120,8 +124,36 @@ export async function check([id], ctx) {
 
   const ro = new ResizeObserver(() => paint());
   let letSleep = () => {};
+  // The one choice the player gets: which stop goes first.
+  const side = h('section', { class: 'train-side' });
+  function showSide() {
+    if (started) {
+      title.textContent = barsLabel(groups[index]);
+      fill(side,
+        h('p', { class: 'goal' }, 'One go, first try. No warm-up.'),
+        h('div', { class: 'answers' },
+          h('button', { class: 'answer slip', onClick: slip }, 'Slip'),
+          h('button', { class: 'answer clean', onClick: clean }, 'Clean')));
+      return;
+    }
+    title.textContent = 'Next-day check';
+    fill(side,
+      h('p', { class: 'goal' }, 'Which one first?'),
+      h('div', { class: 'chips first-pick', role: 'group', 'aria-label': 'Which one first?' },
+        inScoreOrder.map((group) => h('button', {
+          class: 'chip',
+          onClick: () => {
+            groups = withFirst(groups, group);
+            started = true;
+            clock.setBars(groups[0]);
+            showSide();
+            paint();
+          },
+        }, barsLabel(group)))));
+  }
+
   ctx.onShow(() => {
-    title.textContent = barsLabel(groups[0]);
+    showSide();
     ro.observe(cropBox);
     letSleep = stayAwake(clock);
     clock.start();
@@ -135,10 +167,6 @@ export async function check([id], ctx) {
       clockView(clock),
       h('span', { class: 'stage-tag' }, h('i', {}), stage.name)),
     cropBox,
-    h('section', { class: 'train-side' },
-      h('p', { class: 'goal' }, 'One go, first try. No warm-up.'),
-      h('div', { class: 'answers' },
-        h('button', { class: 'answer slip', onClick: slip }, 'Slip'),
-        h('button', { class: 'answer clean', onClick: clean }, 'Clean'))));
+    side);
   return root;
 }

@@ -106,6 +106,7 @@ test('in the next-day check the prompt can be answered over the questions', asyn
   await switchOn(page);
 
   await page.goto(`/#/check/${pieceId}`);
+  await page.getByRole('group', { name: 'Which one first?' }).getByRole('button', { name: 'Bars 1 to 4' }).tap();
   await expect(page.getByRole('heading', { name: 'Bars 1 to 4' })).toBeVisible();
   await page.locator('.answer.slip').tap();
   await expect(page.getByRole('heading', { name: 'Which bar slipped?' })).toBeVisible();

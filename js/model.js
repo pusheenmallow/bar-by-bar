@@ -258,6 +258,32 @@ export function checkGroups(piece, progress, now = Date.now(), size = 4) {
   return groups;
 }
 
+// A new order for a list. `random` can be swapped for a repeatable one.
+export function shuffle(list, random = Math.random) {
+  const out = list.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+// Random numbers that come out the same every time for the same seed. Used by the tests.
+export function seededRandom(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Today's next-day checks come in a mixed-up order, which helps them stick. The player may choose
+// which one to start with, and only that: the rest keep the order they were dealt.
+export const withFirst = (order, first) => (order.includes(first) ? [first, ...order.filter((g) => g !== first)] : order);
+
 /* ---------- practice time ---------- */
 
 export const practiceMode = (count) => (count <= 2 ? 'bar' : 'phrase');

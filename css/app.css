@@ -197,6 +197,10 @@ h2 { font-size: 1.1rem; font-weight: 500; line-height: 1.3; }
 .btn.quick { display: inline-flex; align-items: baseline; gap: 8px; }
 .session-buttons { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
+/* ---------- the teacher's corner ---------- */
+.teacher-piece { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.teacher-title { display: flex; flex-direction: column; gap: 2px; }
+
 /* ---------- the week, for the teacher ---------- */
 .summary-lines { display: grid; grid-template-columns: minmax(180px, 280px) 1fr; gap: 8px 18px; width: 100%; margin: 0; }
 .summary-lines dt { color: var(--ink-2); }

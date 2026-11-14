@@ -1,4 +1,4 @@
-import { h, go, icon, sheet, closeSheet, toast, confirmSheet } from '../ui.js';
+import { h, go, swapTo, icon, sheet, closeSheet, toast, confirmSheet } from '../ui.js';
 import { all, put, del, byIndex, getMeta, setMeta, exportAll, importAll, progressMap, groupOf, learnersOf, removeLearner, deletePiece, playerDays } from '../store.js';
 import { penVar, PLAYER_PENS, newId, playableBars, topStage, nameList, weekSummary, weekTarget, timeText } from '../model.js';
 import { themeChoice, setTheme } from '../theme.js';
@@ -13,18 +13,31 @@ const hash = async (pin) => {
   return [...new Uint8Array(out)].map((b) => b.toString(16).padStart(2, '0')).join('');
 };
 
+// One keypad for both PINs. The grown-up PIN opens Grown-ups. The teacher's PIN, if one has been
+// set, opens only the Teacher screens, wherever it is typed.
 export async function gate(next) {
   const saved = await getMeta('pinHash');
+  const teacherPin = saved ? await getMeta('teacherPinHash') : null;
+  const atTeacher = () => location.hash.startsWith('#/teacher');
+  // The grown-up PIN also opens the Teacher screens, when that is where it was typed.
+  const unlock = () => { if (atTeacher()) session.teacher = true; else session.parent = true; };
   let first = null;
   let entry = '';
-  const title = h('h1', {}, saved ? 'Enter the grown-up PIN' : 'Choose a 4-digit PIN');
-  const sub = h('p', { class: 'lead' }, saved ? 'This keeps pieces and settings safe.' : 'Grown-ups use this to add pieces and notes.');
+  const title = h('h1', {}, !saved ? 'Choose a 4-digit PIN' : teacherPin ? 'Enter a PIN' : 'Enter the grown-up PIN');
+  const sub = h('p', { class: 'lead' }, !saved ? 'Grown-ups use this to add pieces and notes.'
+    : teacherPin ? 'The grown-up PIN, or the teacher’s.' : 'This keeps pieces and settings safe.');
   const dots = h('div', { class: 'pin-dots', 'aria-hidden': 'true' }, [0, 1, 2, 3].map(() => h('i', {})));
   const show = () => [...dots.children].forEach((d, i) => d.classList.toggle('on', i < entry.length));
 
   async function complete() {
     if (saved) {
-      if ((await hash(entry)) === saved) { session.parent = true; next(); return; }
+      const typed = await hash(entry);
+      if (typed === saved) { unlock(); next(); return; }
+      if (teacherPin && typed === teacherPin) {
+        session.teacher = true;
+        if (atTeacher()) next(); else swapTo('/teacher');
+        return;
+      }
       entry = ''; show(); toast('That PIN is not right.');
       return;
     }
@@ -40,7 +53,7 @@ export async function gate(next) {
       return;
     }
     await setMeta('pinHash', await hash(entry));
-    session.parent = true;
+    unlock();
     next();
   }
 
@@ -81,6 +94,33 @@ export async function gate(next) {
         },
       }, k === 'del' ? icon('back') : k)))),
     saved && h('button', { class: 'quiet-link', onClick: forgot }, 'Forgot the PIN'));
+}
+
+// The teacher's PIN is chosen by a grown-up, and must differ from their own.
+function teacherPinSheet(done) {
+  const pin = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', maxlength: 4, 'aria-label': 'Teacher PIN' });
+  const again = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', maxlength: 4, 'aria-label': 'Teacher PIN again' });
+  sheet([
+    h('h2', {}, 'Teacher PIN'),
+    h('p', {}, 'Four digits, different from yours. It opens the Teacher screens only.'),
+    field('PIN', pin),
+    field('Once more', again),
+    h('div', { class: 'row-buttons' },
+      h('button', { class: 'btn', onClick: () => closeSheet() }, 'Cancel'),
+      h('button', {
+        class: 'btn primary',
+        onClick: async () => {
+          if (!/^\d{4}$/.test(pin.value)) { toast('Use four digits.'); return; }
+          if (pin.value !== again.value) { toast('Those PINs did not match.'); return; }
+          const hashed = await hash(pin.value);
+          if (hashed === await getMeta('pinHash')) { toast('Choose a PIN that is different from the grown-up PIN.'); return; }
+          await setMeta('teacherPinHash', hashed);
+          closeSheet();
+          toast('Teacher PIN saved.');
+          done();
+        },
+      }, 'Save teacher PIN')),
+  ]);
 }
 
 function playerSheet(existing, done) {
@@ -155,6 +195,7 @@ export async function parentHome(_, ctx) {
   const safe = await navigator.storage?.persisted?.();
   const shadowing = await shadowOn();
   const shadowStats = await shadowStatsOn();
+  const teacherPin = await getMeta('teacherPinHash');
   const nameOf = (id) => players.find((p) => p.id === id)?.name || 'Nobody';
   // Grown-ups see the week in days and minutes. The player sees only dots.
   const weeks = new Map();
@@ -285,6 +326,16 @@ export async function parentHome(_, ctx) {
       h('label', { class: 'toggle' },
         h('input', { type: 'checkbox', checked: !isMuted(), onChange: (e) => setMuted(!e.target.checked) }),
         h('span', {}, 'Play sticker and celebration sounds'))),
+
+    h('section', { class: 'block' },
+      h('h2', {}, 'Teacher'),
+      h('p', { class: 'field-hint' }, 'If the tablet comes to lessons, the teacher can have a PIN of their own. Typed at the lock, it opens only the Teacher screens: each player’s assignment, their week, and their recordings. It can’t reach settings, backups or anything that deletes. Nothing leaves the tablet.'),
+      h('div', { class: 'row-buttons left' },
+        h('button', { class: 'btn', onClick: () => teacherPinSheet(() => ctx.rerender()) }, teacherPin ? 'Change the teacher PIN' : 'Set a teacher PIN'),
+        teacherPin && h('button', {
+          class: 'btn',
+          onClick: async () => { await setMeta('teacherPinHash', null); toast('Teacher PIN removed.'); ctx.rerender(); },
+        }, 'Remove the teacher PIN'))),
 
     h('section', { class: 'block' },
       h('h2', {}, 'Shadow grade'),

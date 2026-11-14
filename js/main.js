@@ -16,6 +16,7 @@ import { assign } from './screens/assign.js';
 import { today } from './screens/today.js';
 import { takes } from './screens/takes.js';
 import { summaryScreen } from './screens/summary.js';
+import { teacherHome } from './screens/teacher.js';
 import { session } from './session.js';
 import { setUpgradeGate } from './store.js';
 import { upgradeGate, upgradeFailed } from './upgrade.js';
@@ -43,6 +44,10 @@ const routes = [
   [/^\/parent\/recording\/([^/]+)$/, recordingScreen],
   [/^\/parent\/assign\/([^/]+)$/, assign],
   [/^\/parent\/summary\/([^/]+)$/, summaryScreen],
+  [/^\/teacher$/, teacherHome],
+  [/^\/teacher\/assign\/([^/]+)$/, (args, ctx) => assign(args, ctx, 'teacher')],
+  [/^\/teacher\/summary\/([^/]+)$/, (args, ctx) => summaryScreen(args, ctx, 'teacher')],
+  [/^\/teacher\/takes\/([^/]+)$/, (args, ctx) => takes(args, ctx, 'teacher')],
 ];
 
 const app = document.getElementById('app');
@@ -55,9 +60,11 @@ let onScreen = null;
 // Grown-ups is a separate space: it is open only while on its own screens.
 function enter(path) {
   noteRoute(path);
-  const grownUps = path.startsWith('/parent');
+  const teacher = path.startsWith('/teacher');
+  const grownUps = path.startsWith('/parent') || teacher;          // both are behind a PIN, away from the players' screens
   if (grownUps && !inGrownUps) session.exitTo = lastPath || '/';
-  if (!grownUps) session.parent = false;
+  if (!path.startsWith('/parent')) session.parent = false;
+  if (!teacher) session.teacher = false;
   inGrownUps = grownUps;
   lastPath = path;
   document.documentElement.dataset.space = grownUps ? 'grown-ups' : 'players';
@@ -82,7 +89,7 @@ async function render() {
       ? await match[1](match[0].slice(1).map((part) => part && decodeURIComponent(part)), ctx)
       : await home([], ctx);
     if (mine !== renderId) return;
-    const view = `${path}|${!!session.parent}`;     // redrawing a screen in place stays instant
+    const view = `${path}|${!!session.parent}|${!!session.teacher}`;     // redrawing a screen in place stays instant
     const swap = () => {
       if (mine !== renderId) return;
       app.replaceChildren(el);

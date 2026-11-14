@@ -7,11 +7,13 @@ import {
   blankAssignment, parseBarNumbers, playableBars, practiceStages, numberRanges, dayKey, assignmentEnvelope, readAssignmentEnvelope,
 } from '../model.js';
 import { session } from '../session.js';
-import { field, stepper, missing, backTo, doneButton, learnerTabs } from './common.js';
+import { field, stepper, missing, backTo, doneButton, learnerTabs, areaHome } from './common.js';
 import { gate } from './parent.js';
 
-export async function assign([id], ctx) {
-  if (!session.parent) return gate(() => ctx.rerender());
+// `area` is 'parent' from Grown-ups, or 'teacher' from the Teacher screens.
+export async function assign([id], ctx, area = 'parent') {
+  if (area === 'parent' ? !session.parent : !session.teacher) return gate(() => ctx.rerender());
+  const home = areaHome(area, id);
   const piece = await get('pieces', id);
   if (!piece) return missing('That piece has gone.');
   const person = await get('players', piece.playerId);
@@ -23,7 +25,7 @@ export async function assign([id], ctx) {
   if (loaded) Object.assign(a, loaded.fields);
   const stages = practiceStages(piece);
   const numbers = playableBars(piece).map((b) => b.n);
-  const tabs = await learnerTabs(piece, (other) => `/parent/assign/${other}`);
+  const tabs = await learnerTabs(piece, (other) => `/${area}/assign/${other}`);
 
   // Says back what was understood, so a typing slip shows before it is saved.
   const understood = (text, empty) => {
@@ -45,13 +47,13 @@ export async function assign([id], ctx) {
     a.updatedAt = Date.now();
     await saveAssignment(a);
     toast('Assignment saved.');
-    goUp(`/parent/piece/${id}`);
+    goUp(home.path);
   }
 
   async function clear() {
     if (existing) await saveAssignment({ ...existing, status: 'done', updatedAt: Date.now() });
     toast('Assignment cleared.');
-    goUp(`/parent/piece/${id}`);
+    goUp(home.path);
   }
 
   // As a file, to hand to another tablet. It holds bar numbers and settings, and no names.
@@ -81,7 +83,7 @@ export async function assign([id], ctx) {
 
   return h('main', { class: 'screen form' },
     h('header', { class: 'bar-top' },
-      backTo('Piece settings', `/parent/piece/${id}`),
+      backTo(home.back, home.path),
       h('h1', {}, 'This week’s assignment'),
       doneButton()),
     tabs,

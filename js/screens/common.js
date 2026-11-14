@@ -27,6 +27,7 @@ export const backTo = (label, path) => h('button', { class: 'back', onClick: () 
 
 export function leaveGrownUps() {
   session.parent = false;
+  session.teacher = false;
   goUp(session.exitTo);
 }
 

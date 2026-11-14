@@ -6,17 +6,20 @@ import { h, fill, icon, toast, confirmSheet } from '../ui.js';
 import { get, del, takesFor } from '../store.js';
 import { penVar, thenAndNow, agoText, dayKey } from '../model.js';
 import { session } from '../session.js';
-import { missing, backTo, sessionHome } from './common.js';
+import { missing, backTo, sessionHome, areaHome, doneButton } from './common.js';
 import { gate } from './parent.js';
 
-// `area` is 'parent' when opened from Grown-ups, which is behind the PIN. Otherwise it is the player's own view.
+// `area` is 'parent' from Grown-ups or 'teacher' from the Teacher screens, both behind a PIN.
+// Otherwise it is the player's own view. Only Grown-ups can delete.
 export async function takes([id], ctx, area = null) {
   if (area === 'parent' && !session.parent) return gate(() => ctx.rerender());
+  if (area === 'teacher' && !session.teacher) return gate(() => ctx.rerender());
   const piece = await get('pieces', id);
   if (!piece) return missing('That piece has gone.');
   const person = await get('players', piece.playerId);
   const staff = !!area;
-  const home = area === 'parent' ? { back: 'Piece settings', path: `/parent/piece/${id}` } : sessionHome(id);
+  const home = area ? areaHome(area, id) : sessionHome(id);
+  const canDelete = area === 'parent';
   let list = await takesFor(id);
 
   // One sound at a time, from whichever recording was tapped.
@@ -86,14 +89,15 @@ export async function takes([id], ctx, area = null) {
         h('span', { class: 'take-when' }, agoText(take.day, today)),
         h('span', { class: 'take-what' }, what(take)),
         playButton(take, 'Play'),
-        staff && h('button', { class: 'btn danger', onClick: () => remove(take) }, 'Delete')))));
+        canDelete && h('button', { class: 'btn danger', onClick: () => remove(take) }, 'Delete')))));
   }
   show();
 
   return h('main', { class: 'screen takes', vars: { pen: penVar(person?.pen || 'sky') } },
     h('header', { class: 'bar-top' },
       backTo(home.back, home.path),
-      h('h1', {}, staff && person ? `${person.name}’s recordings` : 'My recordings')),
+      h('h1', {}, staff && person ? `${person.name}’s recordings` : 'My recordings'),
+      staff ? doneButton() : null),
     h('p', { class: 'lead' }, piece.title),
     body);
 }

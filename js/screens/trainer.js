@@ -15,6 +15,7 @@ import { Hearing } from '../hear.js';
 import { Shadow } from '../shadow.js';
 
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const MAX_BARS = 12;            // the longest phrase, as on the score
 
 export async function trainer([id, csv, stageId, runGoal], ctx) {
   const piece = await get('pieces', id);
@@ -381,7 +382,26 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
 
   function showTip(m) {
     const twice = run.slipsInRow === OFFER_AFTER;
-    fill(coach, slowNote, h('p', { class: 'fix' }, m.fix), twice ? easier() : null);
+    fill(coach, slowNote, h('p', { class: 'fix' }, m.fix), m.id === 'join' ? joinOffer() : null, twice ? easier() : null);
+  }
+
+  // Practise different bars without leaving. The stickers already won stay.
+  function useBars(list) {
+    bars = list;
+    clock.setBars(list);
+    title.textContent = barsLabel(bars);
+    paint();
+  }
+
+  // Stuck between bars: the join is the thing to practise, so offer this bar with the next one.
+  function joinOffer() {
+    const playable = allBars.filter((b) => !b.skip);
+    const next = playable[playable.findIndex((b) => b.id === bars.at(-1).id) + 1];
+    if (!next || bars.length >= MAX_BARS) return null;
+    const longer = [...bars, next];
+    const box = h('div', { class: 'coach-easier' });
+    return fill(box, h('button', { class: 'btn', onClick: () => { useBars(longer); box.remove(); } },
+      `Play ${barsLabel(longer).toLowerCase()} together`));
   }
 
   function easier() {
@@ -394,12 +414,7 @@ export async function trainer([id, csv, stageId, runGoal], ctx) {
     }
     if (bars.length > 1) {
       const half = Math.ceil(bars.length / 2);
-      [bars.slice(0, half), bars.slice(half)].forEach((part) => options.push(option(`Just ${barsLabel(part).toLowerCase()}`, () => {
-        bars = part;
-        clock.setBars(part);
-        title.textContent = barsLabel(bars);
-        paint();
-      })));
+      [bars.slice(0, half), bars.slice(half)].forEach((part) => options.push(option(`Just ${barsLabel(part).toLowerCase()}`, () => useBars(part))));
     }
     return fill(box,
       h('span', {}, options.length ? 'Two slips in a row. Make it easier:' : 'Two slips in a row. Go slower, just the beats around the slip.'),

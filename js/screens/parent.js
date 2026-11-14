@@ -5,7 +5,7 @@ import { themeChoice, setTheme } from '../theme.js';
 import { session } from '../session.js';
 import { isMuted, setMuted } from '../sound.js';
 import { field, busyPanel, doneButton, leaveGrownUps, stepper } from './common.js';
-import { shadowOn, setShadow } from '../shadow.js';
+import { shadowOn, setShadow, shadowStatsOn, setShadowStats } from '../shadow.js';
 
 const hash = async (pin) => {
   const bytes = new TextEncoder().encode(`bar-by-bar:${pin}`);
@@ -154,6 +154,7 @@ export async function parentHome(_, ctx) {
   const lastBackup = await getMeta('lastBackup');
   const safe = await navigator.storage?.persisted?.();
   const shadowing = await shadowOn();
+  const shadowStats = await shadowStatsOn();
   const nameOf = (id) => players.find((p) => p.id === id)?.name || 'Nobody';
   // Grown-ups see the week in days and minutes. The player sees only dots.
   const weeks = new Map();
@@ -287,8 +288,12 @@ export async function parentHome(_, ctx) {
 
     h('section', { class: 'block' },
       h('h2', {}, 'Shadow grade'),
-      h('p', { class: 'field-hint' }, 'A check on how well “clean” and “slip” are being judged. While this is on, sit beside the player. After each of their taps a small prompt asks for your own answer. It changes nothing they see or earn. After 20 plays, each piece’s Stats shows how often you agreed.'),
+      h('p', { class: 'field-hint' }, 'A check on how well “clean” and “slip” are being judged. While the first setting is on, sit beside the player. After each of their taps a small prompt asks for your own answer. It changes nothing they see or earn.'),
       h('label', { class: 'toggle' },
         h('input', { type: 'checkbox', checked: shadowing, onChange: (e) => setShadow(e.target.checked) }),
-        h('span', {}, 'Ask for my answer after each play on this tablet'))));
+        h('span', {}, 'Ask for my answer after each play on this tablet')),
+      h('label', { class: 'toggle' },
+        h('input', { type: 'checkbox', checked: shadowStats, onChange: (e) => setShadowStats(e.target.checked) }),
+        h('span', {}, 'Show how often we agreed in each piece’s grown-up Stats')),
+      h('p', { class: 'field-hint' }, 'The two are separate. Agreement appears once 20 plays have been graded, and only ever in Grown-ups.')));
 }

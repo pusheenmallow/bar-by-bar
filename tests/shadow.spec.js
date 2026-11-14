@@ -11,6 +11,13 @@ async function switchOn(page) {
   await expect.poll(async () => (await rows(page, 'meta')).find((m) => m.key === 'shadowGrade')?.value).toBe(true);
 }
 
+const STATS_LABEL = 'Show how often we agreed in each piece’s grown-up Stats';
+async function showAgreement(page, on = true) {
+  await openGrownUps(page);
+  await page.getByRole('checkbox', { name: STATS_LABEL }).setChecked(on);
+  await expect.poll(async () => (await rows(page, 'meta')).find((m) => m.key === 'shadowStats')?.value).toBe(on);
+}
+
 // Puts graded plays straight into the database: [child's mark, grown-up's verdict] pairs.
 async function addGraded(page, pieceId, pairs) {
   await page.evaluate(async ({ pieceId, pairs }) => {
@@ -134,6 +141,7 @@ test('grown-up stats show agreement after 20 graded plays, counted per player', 
   ]);
   await addGraded(page, seeded.pieces.Juno, [['clean', 'slip'], ['clean', 'slip'], ['clean', 'clean']]);
 
+  await showAgreement(page);
   await openGrownUps(page, `/parent/stats/${seeded.pieces.Pip}`);
   const block = page.locator('.shadow-stats');
   await expect(block).toContainText('19 of 20 plays graded so far');
@@ -157,6 +165,69 @@ test('grown-up stats show agreement after 20 graded plays, counted per player', 
   await expect(page.locator('main')).not.toContainText(/shadow|agreed/i);
 });
 
+test('the prompt and the agreement readout are two separate settings, both off to begin with', async ({ page }) => {
+  const seeded = await seedPiece(page);
+  const pieceId = seeded.pieces.Pip;
+  await openGrownUps(page);
+  const ask = page.getByRole('checkbox', { name: 'Ask for my answer after each play on this tablet' });
+  const show = page.getByRole('checkbox', { name: STATS_LABEL });
+  await expect(ask).not.toBeChecked();
+  await expect(show).not.toBeChecked();
+
+  // The prompt on its own: plays are graded, and Stats shows nothing.
+  await switchOn(page);
+  await expect(show).not.toBeChecked();
+  await openTrainer(page, pieceId, seeded.bars[0]);
+  await page.locator('.answer.clean').tap();
+  await grade(page, 'Clean');
+  await openGrownUps(page, `/parent/stats/${pieceId}`);
+  await expect(page.getByRole('heading', { name: 'Time on each bar' })).toBeVisible();
+  await expect(page.locator('.shadow-stats')).toHaveCount(0);
+
+  // The readout on its own: it shows, and there is no prompt.
+  await openGrownUps(page);
+  await ask.uncheck();
+  await showAgreement(page);
+  await expect(ask).not.toBeChecked();
+  await openGrownUps(page, `/parent/stats/${pieceId}`);
+  await expect(page.locator('.shadow-stats')).toContainText('1 of 20 plays graded so far');
+  await openTrainer(page, pieceId, seeded.bars[0]);
+  await page.locator('.answer.clean').tap();
+  await expect(page.locator('.slot .sticker')).toHaveCount(1);
+  await expect(prompt(page)).toHaveCount(0);
+
+  // Neither setting, nor the readout, is anywhere on the player's side.
+  for (const path of [`/stats/${pieceId}`, `/piece/${pieceId}`, `/player/${seeded.players.Pip}`]) {
+    await page.goto(`/#${path}`);
+    await expect(page.locator('main')).toBeVisible();
+    await expect(page.locator('main')).not.toContainText(/shadow|agreed|grown-up check/i);
+    await expect(page.locator('.shadow-stats, .shadow-ask')).toHaveCount(0);
+  }
+});
+
+test('a tablet that already had the prompt on keeps its readout, and switching the prompt off leaves it', async ({ page }) => {
+  const seeded = await seedPiece(page);
+  const pieceId = seeded.pieces.Pip;
+  // As saved by the version before there were two settings.
+  await page.evaluate(async () => (await import('/js/store.js')).setMeta('shadowGrade', true));
+  await addGraded(page, pieceId, [['clean', 'clean'], ['clean', 'slip']]);
+
+  await openGrownUps(page, `/parent/stats/${pieceId}`);
+  await expect(page.locator('.shadow-stats')).toContainText('2 of 20 plays graded so far');
+  await openGrownUps(page);
+  await expect(page.getByRole('checkbox', { name: STATS_LABEL })).toBeChecked();
+  await page.getByRole('checkbox', { name: 'Ask for my answer after each play on this tablet' }).uncheck();
+  await expect.poll(async () => (await rows(page, 'meta')).find((m) => m.key === 'shadowGrade')?.value).toBe(false);
+  expect((await rows(page, 'meta')).find((m) => m.key === 'shadowStats')?.value).toBe(true);
+  await openGrownUps(page, `/parent/stats/${pieceId}`);
+  await expect(page.locator('.shadow-stats')).toContainText('2 of 20 plays graded so far');
+
+  await showAgreement(page, false);
+  await openGrownUps(page, `/parent/stats/${pieceId}`);
+  await expect(page.getByRole('heading', { name: 'Time on each bar' })).toBeVisible();
+  await expect(page.locator('.shadow-stats')).toHaveCount(0);
+});
+
 test('switching it off again stops the prompt, and the results stay for grown-ups', async ({ page }) => {
   const seeded = await seedPiece(page);
   const pieceId = seeded.pieces.Pip;
@@ -174,6 +245,7 @@ test('switching it off again stops the prompt, and the results stay for grown-up
   await expect(prompt(page)).toHaveCount(0);
   expect((await attemptsFor(page, pieceId)).map((a) => a.shadow)).toEqual(['clean', null]);
 
+  await showAgreement(page);
   await openGrownUps(page, `/parent/stats/${pieceId}`);
   await expect(page.locator('.shadow-stats')).toContainText('1 of 20 plays graded so far');
 });

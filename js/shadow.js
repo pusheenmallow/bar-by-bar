@@ -6,9 +6,25 @@
 import { h } from './ui.js';
 import { getMeta, setMeta, gradeAttempt } from './store.js';
 
+// Two separate grown-up settings. One shows the prompt after each play. The other shows the
+// agreement readout in a piece's Stats. Neither is ever shown to the player as a setting.
 const KEY = 'shadowGrade';
+const STATS_KEY = 'shadowStats';
 export const shadowOn = () => getMeta(KEY, false);
-export const setShadow = (on) => setMeta(KEY, !!on);
+
+// Before there were two settings, switching the prompt on also showed the readout. A tablet that
+// has never set the second one keeps that: it follows the prompt until either is changed.
+export async function shadowStatsOn() {
+  const set = await getMeta(STATS_KEY);
+  return set ?? shadowOn();
+}
+const pinStats = async () => { if ((await getMeta(STATS_KEY)) == null) await setMeta(STATS_KEY, !!(await shadowOn())); };
+
+export async function setShadow(on) {
+  await pinStats();                 // from here on the two no longer move together
+  await setMeta(KEY, !!on);
+}
+export const setShadowStats = (on) => setMeta(STATS_KEY, !!on);
 
 export class Shadow {
   // Null when shadow grading is off, so screens can write `shadow?.ask()`.

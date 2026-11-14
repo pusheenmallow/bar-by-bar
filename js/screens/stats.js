@@ -1,7 +1,7 @@
 import { h, fill } from '../ui.js';
 import { get, all, byIndex, timeDocs, dayTotal, timeSaved, attemptsSaved } from '../store.js';
 import { MODES, playableBars, dayKey, goalSeconds, timeText, clockText, numberRanges, shadowAgreement, SHADOW_ENOUGH } from '../model.js';
-import { shadowOn } from '../shadow.js';
+import { shadowStatsOn } from '../shadow.js';
 import { session } from '../session.js';
 import { missing, backTo, doneButton, learnerTabs } from './common.js';
 import { gate } from './parent.js';
@@ -81,11 +81,12 @@ function splitBar(totals) {
 }
 
 // For grown-ups only: how a grown-up's verdicts compared with the player's own, over all their pieces.
+// Shown only while its own setting in Grown-ups is on, whether or not the prompt is.
 async function shadowBlock(piece) {
+  if (!(await shadowStatsOn())) return null;
   await attemptsSaved();
   const theirs = (await all('attempts')).filter((a) => a.playerId === piece.playerId);
   const tally = shadowAgreement(theirs);
-  if (!tally.graded && !(await shadowOn())) return null;
   const name = (await get('players', piece.playerId))?.name || 'The player';
   const plays = (n) => `${n} ${n === 1 ? 'play' : 'plays'}`;
   return h('section', { class: 'block shadow-stats' },

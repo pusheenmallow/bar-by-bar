@@ -1,8 +1,8 @@
 import { h, go, fill, icon, sticker, crown, sheet, closeSheet, replaceSheet } from '../ui.js';
-import { get, put, progressMap, scheduleMap, timeDocs, dayTotal, timeSaved } from '../store.js';
+import { get, put, progressMap, scheduleMap, currentAssignment, timeDocs, dayTotal, timeSaved } from '../store.js';
 import {
-  penVar, listBars, playableBars, blankProgress, checkStatus, waitingForCheck, checkGroups, topStage,
-  solidStages, hasGold, barStep, barsLabel, dayKey, newId, goalSeconds, timeText, clockText, numberRanges,
+  penVar, listBars, playableBars, blankProgress, checkStatus, waitingForCheck, topStage,
+  solidStages, hasGold, barStep, activePins, reviewGroups, barsLabel, dayKey, newId, goalSeconds, timeText, clockText, numberRanges,
 } from '../model.js';
 import { drawBars } from '../images.js';
 import { cssVar } from '../theme.js';
@@ -23,6 +23,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
   await timeSaved();
   let progress = await progressMap(id);
   const schedule = await scheduleMap(id);
+  const pinned = activePins(piece, await currentAssignment(id));
   const docs = await timeDocs(id);
   const bars = listBars(piece);
   const playable = playableBars(piece);
@@ -115,6 +116,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
         gold ? 'gold crown' : '',
         seconds ? `${timeText(seconds)} practised` : '',
         prog?.flagged ? 'tough bar' : '',
+        pinned.has(bar.id) ? 'pinned for this week' : '',
         prog?.runSlip ? 'slipped in the last whole-piece play' : '',
         prog?.notes.length ? 'has a note' : '',
         waiting ? 'ready for a next-day check' : '',
@@ -186,7 +188,7 @@ export async function mapScreen([id], ctx, grownUp = false) {
 
   const bannerEl = h('div', { class: 'banner-slot' });
   function banner() {
-    const count = checkGroups(piece, progress, Date.now(), 4, schedule).flat().length;
+    const count = reviewGroups(piece, progress, schedule, { pinned, cap: Infinity }).flat().length;
     const slipped = playable.filter((b) => progress.get(b.id)?.runSlip);
     const nudge = goal && todaySeconds >= goal * 0.7 && !(today?.modes.piece > 0) && playable.length > 2;
     let content = [];

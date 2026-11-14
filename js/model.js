@@ -287,6 +287,43 @@ export function afterRunSlip(entry, today) {
   return { ...entry, step: Math.max(1, entry.step - 1), dueDay: entry.dueDay && entry.dueDay < tomorrow ? entry.dueDay : tomorrow };
 }
 
+/* ---------- the week's assignment ---------- */
+
+// "9-16, 21" as numbers. Dashes of any kind and the word "to" all make a range.
+export function parseBarNumbers(text) {
+  const out = new Set();
+  for (const part of String(text || '').split(/[,;]|\band\b/)) {
+    const m = part.trim().match(/^(\d+)(?:\s*(?:-|–|—|to)\s*(\d+))?$/);
+    if (!m) continue;
+    const from = Number(m[1]), to = Number(m[2] ?? m[1]);
+    for (let n = Math.min(from, to); n <= Math.max(from, to) && out.size < 2000; n++) out.add(n);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+export const DEFAULT_SESSION_MINUTES = 15;
+export const blankAssignment = (piece) => ({
+  id: crypto.randomUUID(), pieceId: piece.id, playerId: piece.playerId ?? null, status: 'current', createdAt: Date.now(),
+  bars: '', pins: '', pinsDone: [], stageId: practiceStages(piece).at(-1)?.id ?? null, tempo: piece.tempo,
+  lessonDate: '', minutes: DEFAULT_SESSION_MINUTES, note: '',
+});
+
+const barsNumbered = (piece, text) => {
+  const wanted = new Set(parseBarNumbers(text));
+  return playableBars(piece).filter((b) => wanted.has(b.n));
+};
+// The pool of new material, in score order. Empty means "whatever comes next in the music".
+export const assignedBars = (piece, assignment) => (assignment?.status === 'current' ? barsNumbered(piece, assignment.bars) : []);
+
+// Pins beat the ladder: a pinned bar is seen every session. A pin lets go once the bar is played
+// clean in a check, or once the lesson date has passed, whichever is first.
+export function activePins(piece, assignment, now = Date.now()) {
+  if (!assignment || assignment.status !== 'current') return new Set();
+  if (assignment.lessonDate && dayKey(now) > assignment.lessonDate) return new Set();
+  const cleared = new Set(assignment.pinsDone || []);
+  return new Set(barsNumbered(piece, assignment.pins).map((b) => b.id).filter((id) => !cleared.has(id)));
+}
+
 export function waitingForCheck(piece, bar, prog, now = Date.now(), saved = null) {
   const entry = scheduleOf(piece, bar, prog, saved);
   if (!entry || !entry.dueDay) return false;

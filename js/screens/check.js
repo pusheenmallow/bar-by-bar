@@ -3,7 +3,7 @@ import { get, put, byIndex, progressMap, scheduleMap, currentAssignment, addAtte
 import { session } from '../session.js';
 import {
   reviewGroups, scheduleOf, afterReview, checkStage, barsLabel, dayKey, mistakeList, blankProgress, shuffle, seededRandom, withFirst,
-  shortReturn, warmUpBar, RETURN_STOPS, REVIEW_CAP,
+  shortReturn, warmUpBar, RETURN_STOPS, REVIEW_CAP, activePins,
 } from '../model.js';
 import { drawBars } from '../images.js';
 import { stickOn, fanfare } from '../sound.js';
@@ -26,7 +26,8 @@ export async function check([id], ctx) {
   const earlier = (await byIndex('attempts', 'pieceId', id)).filter((a) => (a.day || dayKey(a.at)) === today);
   // Opening the check is the "Ready" tap. Plays made on a bar earlier today were its warm-ups.
   const warmUpsOn = (bar) => earlier.filter((a) => a.barIds.includes(bar.id)).length;
-  const inScoreOrder = reviewGroups(piece, progress, schedule, { cap: back ? RETURN_STOPS : REVIEW_CAP });
+  const pinned = activePins(piece, assignment);
+  const inScoreOrder = reviewGroups(piece, progress, schedule, { pinned, cap: back ? RETURN_STOPS : REVIEW_CAP });
   let warmUp = back && stage ? warmUpBar(piece, progress, inScoreOrder) : null;
   // Mixed up, so the bars aren't always met in the order they come in the music.
   let groups = shuffle(inScoreOrder, session.shuffleSeed == null ? Math.random : seededRandom(session.shuffleSeed));
@@ -66,6 +67,10 @@ export async function check([id], ctx) {
       const next = afterReview(entry, { clean: ok, warmUps: warmUpsOn(bar), today: dayKey(Date.now()), lessonDay: assignment?.lessonDate || null });
       await put('schedule', next);
       schedule.set(bar.id, next);
+    }
+    if (ok && pinned.has(bar.id)) {                           // played clean in a check: the pin lets go
+      assignment.pinsDone = [...(assignment.pinsDone || []), bar.id];
+      await put('assignments', assignment);
     }
     if (ok) passed += 1; else again.push(bar);
   };

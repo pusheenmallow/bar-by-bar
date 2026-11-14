@@ -8,7 +8,7 @@ const FILES = [
   'js/detect-client.js', 'js/detect-core.js', 'js/detect-worker.js',
   'js/screens/home.js', 'js/screens/player.js', 'js/screens/map.js', 'js/screens/trainer.js', 'js/screens/check.js',
   'js/screens/whole.js', 'js/screens/stats.js', 'js/screens/score.js',
-  'js/screens/common.js', 'js/screens/pick.js', 'js/screens/recording.js', 'js/audio.js', 'js/marks.js', 'js/hear.js', 'js/screens/parent.js', 'js/screens/add.js', 'js/screens/review.js', 'js/screens/settings.js',
+  'js/screens/common.js', 'js/screens/pick.js', 'js/screens/recording.js', 'js/audio.js', 'js/marks.js', 'js/hear.js', 'js/screens/parent.js', 'js/screens/add.js', 'js/screens/review.js', 'js/screens/settings.js', 'js/screens/assign.js',
   'vendor/pdf.min.mjs', 'vendor/pdf.worker.min.mjs',
   'fonts/lexend.woff2', 'fonts/music-signs.woff2',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png',
